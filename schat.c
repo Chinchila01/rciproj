@@ -11,6 +11,18 @@
 #include <string.h>
 #include <errno.h>
 
+typedef int bool;
+#define true 1
+#define false 0
+
+// Program States
+#define init 0 // Initial State
+#define registered 1 // Initial State
+
+int stateMachine = init;
+
+int surDir_sock;
+
 /*
  * Function:  show_usage
  * --------------------
@@ -22,6 +34,58 @@ int show_usage(){
 	printf("Usage: schat –n name.surname [–i ip] [-p scport] -s snpip -q snpport\n");
 	return -1;
 
+}
+
+bool dirRegister(char * snpip, char * port){
+	struct sockaddr_in addr;
+	struct in_addr *a;
+	int ret, n;
+	char * msg = "Hello Baby!\n";
+
+	/* Open UDP socket for our server */
+	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
+		printf("error: %s\n",strerror(errno));
+		return -1;
+	}	
+	
+	/* Reset and set addr structure */
+	memset((void*)&addr,(int)'\0',sizeof(addr));
+	addr.sin_family=AF_INET;
+	addr.sin_addr.s_addr=htonl(INADDR_ANY);
+	addr.sin_port=htons(port);
+
+	/* Assigning name to socket */
+	ret=bind(surDir_sock,(struct sockaddr*)&addr,sizeof(addr));
+	if(ret==-1){
+		printf("Error binding name to socket\n");
+		close(surDir_sock);
+		return -1;
+	}
+
+	n=sendto(surDir_sock,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
+	if(n==-1) {
+		printf("reg_sa: error sending to surname server\n");
+		free(msg);
+		close(surDir_sock);
+		return -1;
+	}
+
+
+	/* Registering with surname server                                * 
+	 * --NEEDS: Check if aport,surname,localip and snpport are valid  */
+	printf("Attempting surname registering...\n");
+	/*if(reg_sa(h,aport,surname,snpip,snpport)==-1) {
+		printf("error registering with surname server\n");	
+		return -1;
+	}*/
+
+	return true;
+}
+
+bool dirExit(){
+
+
+	return true;
 }
 
 /*
@@ -48,6 +112,7 @@ int main(int argc, char* argv[]) {
 	char ip_path[1035], garb_0[1035], ip[1035];
 	int lineCount = 2;
 
+	char usrIn[100];
 	struct hostent *h;
 	char options[10] = "n:s:q:i:p:";
 	char *in_name_surname = NULL ,*in_ip = NULL ,*in_scport = NULL,*in_snpip = NULL,*in_snpport = NULL;
@@ -117,8 +182,6 @@ int main(int argc, char* argv[]) {
 
 		pclose(fp_ip);
 
-		printf("%s\n", ip);
-
 		in_ip = ip;
 	}
 
@@ -126,9 +189,35 @@ int main(int argc, char* argv[]) {
 		in_scport = "6000";
 	}
 
-	
 
-	printf("YO\n");
+
+	printf("Connection Data:\nLocalhost:%s:%s\nSurname Server:%s:%s\n",in_ip,in_scport,in_snpip,in_snpport);
+
+	while(1){
+		fgets(usrIn,100,stdin);
+
+		if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
+			dirRegister(in_snpip, in_snpport);
+
+		}else if(strcmp(usrIn,"leave\n") == 0){
+
+		}else if(strcmp(usrIn,"find\n") == 0){
+
+		}else if(strcmp(usrIn,"connect\n") == 0){
+
+		}else if(strcmp(usrIn,"message\n") == 0){
+
+		}else if(strcmp(usrIn,"disconnect\n") == 0){
+
+		}else if(strcmp(usrIn,"exit\n") == 0){
+			// close connections
+			break;
+		}else{
+			printf("You are not allowed to do that my friend.\n");
+		}
+	}
+
+	printf("\n\nThe End\n\n\n");
 
 	return 0;	
 }
