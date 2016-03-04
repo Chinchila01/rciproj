@@ -234,6 +234,7 @@ int reg_user(char* buffer, int n, FILE *fd) {
 */
 int unreg_user(char *buffer, int n, FILE *fp){
 	char name[128],surname[128],temp[512];
+	int line;
 	buffer[n] = '\0';
 	if(sscanf(buffer,"UNR %[^'.'].%s",name,surname) != 2){
 		printf("unreg_user: Message format not recognized\n");
@@ -250,9 +251,13 @@ int unreg_user(char *buffer, int n, FILE *fp){
 		if(temp[0] == '\n') continue;
 		if((strstr(temp, name)) != NULL) {
 			printf("unreg_user: User is registered\n");
-			if(fprintf(fp,"\n") < 0) {
+			line = ftell(fp);
+			printf("line length: %d\n",strlen(temp));
+			fseek(fp,line-1,SEEK_SET);
+			if(fprintf(fp,"NULL") < 0) {
 				printf("unreg_user: error unregistering user\n");
 			}
+			printf("Successful unregistration\n");
 			break;
 		}
 		printf("unreg_user: User is not registered\n");	
