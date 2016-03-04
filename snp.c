@@ -250,17 +250,14 @@ int unreg_user(char *buffer, int n, FILE *fp){
 	while(fgets(temp,512,fp) != NULL) {
 		if(strstr(temp,"NULL") != NULL) continue;
 		if((strstr(temp, name)) != NULL) {
-			printf("unreg_user: User is registered\n");
 			line = ftell(fp);
-			printf("line length: %d\n",line);
 			fseek(fp,line-(int)strlen(temp),SEEK_SET);
 			if(fprintf(fp,"NULL") < 0) {
 				printf("unreg_user: error unregistering user\n");
 			}
-			printf("Successful unregistration\n");
-			break;
+			fseek(fp,0L,SEEK_END);
+			return 1;
 		}
-		printf("unreg_user: User is not registered\n");	
 	}	
 	fseek(fp,0L,SEEK_END);
 	return -1;	
@@ -425,9 +422,15 @@ int main(int argc, char* argv[]) {
 		}else if(strcmp(answer,"UNR")==0){
 			printf("Trying to unregister user...\n");
 			if(unreg_user(buffer,nread,ufile) == -1) {
-				close(fd);
-				fclose(ufile);
-				return -1;
+				printf("error unregistering user\n");
+				if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1) {
+					printf("Error replying to user\n");
+				}
+			}else{
+				printf("Unregistration successful\n");
+				if(sendto(fd,"OK",2,0,(struct sockaddr*)&addr,addrlen) == -1){
+					printf("Error replying to user\n");
+				}
 			}
 		}else {
 			printf("Command not recognized\n");
