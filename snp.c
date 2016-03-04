@@ -10,6 +10,8 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <errno.h>
+
+#define SRVFILE "clientlist"
 extern int errno;
 
 char* servername;
@@ -212,17 +214,17 @@ int reg_user(char* buffer, int n, FILE *fd) {
 		printf("reg_user: Message format not recognized\n");
 		return -1;
 	}
-	printf("name: %s\n",name);
-	printf("surname: %s\n",surname);
-	printf("ip: %s\n",ip);
-	printf("port: %s\n",port);
 
 	if(strcmp(servername,surname) != 0){
 		printf("reg_user: Surname and servername don't match\n");
 		return -1;
 	}
-	fprintf(fd,"%s;%s;%s\n",name,ip,port);
-	return -1;	
+	if(fprintf(fd,"%s;%s;%s\n",name,ip,port) < 0) {
+		printf("reg_user: Error writing to file");
+		return -1;
+	}
+	printf("User registration successful!\n");
+	return 1;
 }
 
 /* Function: unreg_user
@@ -350,7 +352,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	/* Opening server file */
-	ufile = fopen("clientlist","w+");
+	ufile = fopen(SRVFILE,"w+");
 	if(ufile == NULL) {
 		printf("Error opening client file: %s\n", strerror(errno));
 		close(fd);
@@ -377,7 +379,15 @@ int main(int argc, char* argv[]) {
 		if(strcmp(answer,"REG") == 0){
 			if(reg_user(buffer,nread,ufile) == -1) {
 				printf("error registering user\n");
+				if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1){
+					return -1;
+				}
 				return -1;
+			}else{
+				if(sendto(fd,"OK",2,0,(struct sockaddr*)&addr,addrlen) == -1) {
+					printf("Error: %s\n",strerror(errno));
+					return -1;
+				}
 			}
 		}else if(strcmp(answer,"UNR")==0){
 			/*unreg_user();*/
@@ -396,5 +406,6 @@ int main(int argc, char* argv[]) {
 	}
 	
 	close(fd);
+	close(ufile);
 	return 0;	
 }
