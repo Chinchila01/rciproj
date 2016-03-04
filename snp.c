@@ -12,9 +12,10 @@
 #include <errno.h>
 
 #define SRVFILE "clientlist"
-extern int errno;
 
+extern int errno;
 char* servername;
+
 /*
  * Function:  show_usage
  * --------------------
@@ -231,7 +232,34 @@ int reg_user(char* buffer, int n, FILE *fd) {
 *  --------------------
 *  Unregisters a user
 */
-int unreg_user();
+int unreg_user(char *buffer, int n, FILE *fp){
+	char name[128],surname[128],temp[512];
+	buffer[n] = '\0';
+	if(sscanf(buffer,"UNR %[^'.'].%s",name,surname) != 2){
+		printf("unreg_user: Message format not recognized\n");
+		return -1;
+	}
+
+	if(strcmp(servername,surname) != 0) {
+		printf("unreg_user: Surname and Server name don't match\n");
+		return -1;
+	}
+
+	rewind(fp);	
+	while(fgets(temp,512,fp) != NULL) {
+		if(temp[0] == '\n') continue;
+		if((strstr(temp, name)) != NULL) {
+			printf("unreg_user: User is registered\n");
+			if(fprintf(fp,"\n") < 0) {
+				printf("unreg_user: error unregistering user\n");
+			}
+			break;
+		}
+		printf("unreg_user: User is not registered\n");	
+	}	
+	fseek(fp,0L,SEEK_END);
+	return -1;	
+}
 
 /*
  * Function:  main
@@ -375,7 +403,7 @@ int main(int argc, char* argv[]) {
 		/* Parsing... */
 		answer = malloc(3);
 		sprintf(answer,"%.*s",3,buffer);
-		printf("answer is: %s\n",answer);	
+		printf("\nanswer is: %s\n",answer);	
 		if(strcmp(answer,"REG") == 0){
 			if(reg_user(buffer,nread,ufile) == -1) {
 				printf("error registering user\n");
@@ -390,8 +418,12 @@ int main(int argc, char* argv[]) {
 				}
 			}
 		}else if(strcmp(answer,"UNR")==0){
-			/*unreg_user();*/
-			printf("lel1\n");
+			printf("Trying to unregister user...\n");
+			if(unreg_user(buffer,nread,ufile) == -1) {
+				close(fd);
+				fclose(ufile);
+				return -1;
+			}
 		}else {
 			printf("Command not recognized\n");
 		}
@@ -406,6 +438,6 @@ int main(int argc, char* argv[]) {
 	}
 	
 	close(fd);
-	close(ufile);
+	fclose(ufile);
 	return 0;	
 }
