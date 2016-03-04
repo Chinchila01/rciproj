@@ -12,6 +12,7 @@
 #include <errno.h>
 
 #define SRVFILE "clientlist"
+#define max(A,B) ((A)>=(B)?(A):(B))
 
 extern int errno;
 char* servername;
@@ -286,11 +287,15 @@ int main(int argc, char* argv[]) {
 	char options[10] = "n:s:q:i:p:";
 	char *surname = NULL ,*snpip = NULL ,*snpport = NULL,*saip = NULL,*saport = NULL;
 	char c;	
-	int fd, addrlen, ret, nread, port, aport;
+	int addrlen, ret, nread, port, aport;
 	struct sockaddr_in addr;
 	char buffer[128];
 	char *answer;
 	FILE *ufile;
+	/* File descriptors, pointer */
+	int fd;
+	fd_set rfds;
+	int maxfd;
 
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
@@ -392,56 +397,71 @@ int main(int argc, char* argv[]) {
 	/* Begin listening  */
 	printf("Welcome to our server!\n");
 	while(1) {
-		addrlen=sizeof(addr);
-		nread=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
-		if(nread==-1) {
-			printf("Error receiving bytes, closing...\n");
-			close(fd);
+		FD_ZERO(&rfds);
+		FD_SET(fd,&rfds);
+		FD_SET(STDIN_FILENO,&rfds);
+		maxfd=fd;
+
+		if(select(maxfd+1,&rfds,NULL,NULL,NULL)<0){
+			printf("Select() error\n");
 			return -1;
 		}
-		write(1,"echo: ",6);
-		write(1,buffer,nread);
 
-		/* Parsing... */
-		answer = malloc(3);
-		sprintf(answer,"%.*s",3,buffer);
-		printf("\nanswer is: %s\n",answer);	
-		if(strcmp(answer,"REG") == 0){
-			if(reg_user(buffer,nread,ufile) == -1) {
-				printf("error registering user\n");
-				if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1){
-					return -1;
-				}
+		if(FD_ISSET(fd,&rfds)){
+			addrlen=sizeof(addr);
+			nread=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
+			if(nread==-1) {
+				printf("Error receiving bytes, closing...\n");
+				close(fd);
 				return -1;
-			}else{
-				if(sendto(fd,"OK",2,0,(struct sockaddr*)&addr,addrlen) == -1) {
-					printf("Error: %s\n",strerror(errno));
-					return -1;
-				}
 			}
-		}else if(strcmp(answer,"UNR")==0){
-			printf("Trying to unregister user...\n");
-			if(unreg_user(buffer,nread,ufile) == -1) {
-				printf("error unregistering user\n");
-				if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1) {
-					printf("Error replying to user\n");
-				}
-			}else{
-				printf("Unregistration successful\n");
-				if(sendto(fd,"OK",2,0,(struct sockaddr*)&addr,addrlen) == -1){
-					printf("Error replying to user\n");
-				}
-			}
-		}else {
-			printf("Command not recognized\n");
-		}
+			write(1,"echo: ",6);
+			write(1,buffer,nread);
 
-		printf("Sending bytes back\n");
-		ret = sendto(fd,buffer,nread,0,(struct sockaddr*)&addr,addrlen);
-		if(ret==-1) {
-			printf("Error sending bytes, closing...\n");
-			close(fd);
-			return -1;
+			/* Parsing... */
+			answer = malloc(3);
+			sprintf(answer,"%.*s",3,buffer);
+			printf("\nanswer is: %s\n",answer);	
+			if(strcmp(answer,"REG") == 0){
+				if(reg_user(buffer,nread,ufile) == -1) {
+					printf("error registering user\n");
+					if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1){
+						return -1;
+					}
+					return -1;
+				}else{
+					if(sendto(fd,"OK",2,0,(struct sockaddr*)&addr,addrlen) == -1) {
+						printf("Error: %s\n",strerror(errno));
+						return -1;
+					}
+				}
+			}else if(strcmp(answer,"UNR")==0){
+				printf("Trying to unregister user...\n");
+				if(unreg_user(buffer,nread,ufile) == -1) {
+					printf("error unregistering user\n");
+					if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1) {
+						printf("Error replying to user\n");
+					}
+				}else{
+					printf("Unregistration successful\n");
+					if(sendto(fd,"OK",2,0,(struct sockaddr*)&addr,addrlen) == -1){
+						printf("Error replying to user\n");
+					}
+				}
+			}else {
+				printf("Command not recognized\n");
+			}
+
+			printf("Sending bytes back\n");
+			ret = sendto(fd,buffer,nread,0,(struct sockaddr*)&addr,addrlen);
+			if(ret==-1) {
+				printf("Error sending bytes, closing...\n");
+				close(fd);
+				return -1;
+			}
+		}
+		if(FD_ISSET(STDIN_FILENO,&rfds)){
+			printf("lel\n");
 		}
 	}
 	
