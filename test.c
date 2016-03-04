@@ -25,7 +25,7 @@ int main(){
 
 	memset((void*)&addr,(int)'\0',sizeof(addr));
 	addr.sin_family=AF_INET;
-	addr.sin_addr=*a;
+	inet_aton("193.136.131.78", &addr.sin_addr);
 	addr.sin_port=htons(9000);
 
 	n=sendto(fd,"REG afhah.aha;123;900",21,0,(struct sockaddr*)&addr,sizeof(addr));
