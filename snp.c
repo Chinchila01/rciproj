@@ -248,12 +248,12 @@ int unreg_user(char *buffer, int n, FILE *fp){
 
 	rewind(fp);	
 	while(fgets(temp,512,fp) != NULL) {
-		if(temp[0] == '\n') continue;
+		if(strstr(temp,"NULL") != NULL) continue;
 		if((strstr(temp, name)) != NULL) {
 			printf("unreg_user: User is registered\n");
 			line = ftell(fp);
-			printf("line length: %d\n",strlen(temp));
-			fseek(fp,line-1,SEEK_SET);
+			printf("line length: %d\n",line);
+			fseek(fp,line-(int)strlen(temp),SEEK_SET);
 			if(fprintf(fp,"NULL") < 0) {
 				printf("unreg_user: error unregistering user\n");
 			}
