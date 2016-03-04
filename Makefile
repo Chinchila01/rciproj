@@ -7,5 +7,8 @@ main: main.c
 schat: schat.c
 	$(CC) $(CFLAGS) schat.c -o schat 
 
-all: main schat
+test: test.c
+	$(CC) $(CFLAGS) test.c -o test 
+
+all: main schat test
 
