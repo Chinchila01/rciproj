@@ -6,3 +6,6 @@ main: main.c
 
 schat: schat.c
 	$(CC) $(CFLAGS) schat.c -o schat 
+
+all: main schat
+

@@ -8,7 +8,7 @@ schat: schat.c
 	$(CC) $(CFLAGS) schat.c -o schat 
 
 test: test.c
-	$(CC) $(CFLAGS) test.c -o test 
+	$(CC) test.c -o test 
 
 all: snp schat test
 
