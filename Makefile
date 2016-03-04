@@ -1,8 +1,8 @@
 CC=gcc
 CFLAGS=-Wall -pedantic
 
-main: main.c
-	$(CC) $(CFLAGS) main.c -o main 
+snp: snp.c
+	$(CC) $(CFLAGS) snp.c -o snp 
 
 schat: schat.c
 	$(CC) $(CFLAGS) schat.c -o schat 
@@ -10,5 +10,5 @@ schat: schat.c
 test: test.c
 	$(CC) $(CFLAGS) test.c -o test 
 
-all: main schat test
+all: snp schat test
 

@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <netdb.h>
+#include <unistd.h>
 
 int main(){
 	int fd,n,addrlen;
