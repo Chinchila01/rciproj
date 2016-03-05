@@ -12,7 +12,6 @@
 #include <errno.h>
 
 #define SRVFILE "clientlist"
-#define max(A,B) ((A)>=(B)?(A):(B))
 
 extern int errno;
 char* servername;
@@ -288,6 +287,7 @@ int main(int argc, char* argv[]) {
 	char *surname = NULL ,*snpip = NULL ,*snpport = NULL,*saip = NULL,*saport = NULL;
 	char c;	
 	int addrlen, ret, nread, port, aport;
+	struct in_addr temp;
 	struct sockaddr_in addr;
 	char buffer[128];
 	char *answer;
@@ -346,12 +346,21 @@ int main(int argc, char* argv[]) {
 			printf("Couldn't reach default host\n");
 			return -1;
 		}
+	}else{
+		inet_pton(AF_INET, saip, &temp);
+		if((h=gethostbyaddr(&temp,sizeof(temp),AF_INET))==NULL){
+			printf("Couldn't reach surname server\n");
+			return -1;
+		}
 	}
 
 	if(saport == NULL) {
 		aport = 58000;
+	}else{
+		aport = atoi(saport);
 	}
 
+	printf("surname server address: %d\n",aport);
 	/* Get port where our server will listen */
 	if(sscanf(snpport,"%d\n",&port)!=1) {
 		printf("error: port is not a valid number\n");
