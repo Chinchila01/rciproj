@@ -282,11 +282,13 @@ int unreg_user(char *buffer, int n, FILE *fp){
  *		  Create .h and .c auxiliary files	
  */
 int main(int argc, char* argv[]) {
+	int stop = 0;
 	struct hostent *h;
 	char options[10] = "n:s:q:i:p:";
+	char localinput[512];
 	char *surname = NULL ,*snpip = NULL ,*snpport = NULL,*saip = NULL,*saport = NULL;
 	char c;	
-	int addrlen, ret, nread, port, aport;
+	int len,addrlen, ret, nread, port, aport;
 	struct in_addr temp;
 	struct sockaddr_in addr;
 	char buffer[128];
@@ -405,7 +407,7 @@ int main(int argc, char* argv[]) {
 
 	/* Begin listening  */
 	printf("Welcome to our server!\n");
-	while(1) {
+	while(!stop) {
 		FD_ZERO(&rfds);
 		FD_SET(fd,&rfds);
 		FD_SET(STDIN_FILENO,&rfds);
@@ -470,10 +472,13 @@ int main(int argc, char* argv[]) {
 			}
 		}
 		if(FD_ISSET(STDIN_FILENO,&rfds)){
-			printf("lel\n");
+			fgets(localinput,sizeof(localinput),stdin);
+			len = strlen(localinput);
+			if(localinput[len-1] == '\n') localinput[len-1] = '\0';
+			if(strcmp(localinput,"exit") == 0) stop=1;
 		}
 	}
-	
+	unreg_sa(h,aport,surname);	
 	close(fd);
 	fclose(ufile);
 	return 0;	
