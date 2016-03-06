@@ -36,13 +36,20 @@ int show_usage(){
 
 }
 
-bool dirRegister(char * snpip, char * port){
+bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char * my_port){
 	struct sockaddr_in addr;
 	struct in_addr *a;
-	int ret, n;
-	char * msg = "Hello Baby!\n";
+	int ret, n, addrlen;
+	char * msg;
 	struct in_addr temp;
 	struct hostent* h;
+	char buffer[128];
+	char *answer;
+
+	sprintf(buffer,"REG %s;%s;%s\n",full_name,my_ip,my_port);
+
+	msg=malloc(strlen(buffer));
+	msg = buffer;
 
 	/* Open UDP socket for our server */
 	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
@@ -68,19 +75,95 @@ bool dirRegister(char * snpip, char * port){
 		return -1;
 	}
 
-	/* Registering with surname server                                * 
-	 * --NEEDS: Check if aport,surname,localip and snpport are valid  */
-	printf("Attempting surname registering...\n");
-	/*if(reg_sa(h,aport,surname,snpip,snpport)==-1) {
-		printf("error registering with surname server\n");	
+
+	addrlen = sizeof(addr);
+	n=recvfrom(surDir_sock,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
+	if(n==-1) {
+		printf("reg_sa: error receiving from surname server\n");
+		free(msg);
+		close(surDir_sock);
 		return -1;
-	}*/
+	}
+	
+	answer=malloc(n);
+
+	sprintf(answer,"%.*s",n,buffer);
+	if(strcmp(answer,"OK") != 0) {
+		printf("Error: %s\n",answer);
+		
+		close(surDir_sock);
+		return false;
+	}
+
+	printf("User registration successful!\n");
+
+	close(surDir_sock);
 
 	return true;
 }
 
-bool dirExit(){
+bool usrExit(char * snpip, char * port, char * full_name){
+	struct sockaddr_in addr;
+	struct in_addr *a;
+	int ret, n, addrlen;
+	char * msg;
+	struct in_addr temp;
+	struct hostent* h;
+	char buffer[128];
+	char *answer;
 
+	sprintf(buffer,"UNR %s\n",full_name);
+
+	msg=malloc(strlen(buffer));
+	msg = buffer;
+
+	/* Open UDP socket for our server */
+	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
+		printf("error: %s\n",strerror(errno));
+		return -1;
+	}	
+	
+
+	inet_pton(AF_INET, snpip, &temp);
+	h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
+	a=(struct in_addr*)h->h_addr_list[0];
+
+	memset((void*)&addr,(int)'\0',sizeof(addr));
+	addr.sin_family=AF_INET;
+	addr.sin_addr=*a;
+	addr.sin_port=htons(atoi(port));
+
+	n=sendto(surDir_sock,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
+	if(n==-1) {
+		printf("reg_sa: error sending to surname server\n");
+		free(msg);
+		close(surDir_sock);
+		return -1;
+	}
+
+
+	addrlen = sizeof(addr);
+	n=recvfrom(surDir_sock,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
+	if(n==-1) {
+		printf("reg_sa: error receiving from surname server\n");
+		free(msg);
+		close(surDir_sock);
+		return -1;
+	}
+	
+	answer=malloc(n);
+
+	sprintf(answer,"%.*s",n,buffer);
+	if(strcmp(answer,"OK") != 0) {
+		printf("Error: %s\n",answer);
+		
+		close(surDir_sock);
+		return false;
+	}
+
+	printf("User unregistered successful!\n");
+
+	close(surDir_sock);
 
 	return true;
 }
@@ -194,9 +277,10 @@ int main(int argc, char* argv[]) {
 		fgets(usrIn,100,stdin);
 
 		if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
-			dirRegister(in_snpip, in_snpport);
+			usrRegister(in_snpip, in_snpport,in_name_surname,in_ip,in_scport);
 
 		}else if(strcmp(usrIn,"leave\n") == 0){
+			usrExit(in_snpip, in_snpport,in_name_surname);
 
 		}else if(strcmp(usrIn,"find\n") == 0){
 
