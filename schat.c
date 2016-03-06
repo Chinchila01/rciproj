@@ -41,6 +41,8 @@ bool dirRegister(char * snpip, char * port){
 	struct in_addr *a;
 	int ret, n;
 	char * msg = "Hello Baby!\n";
+	struct in_addr temp;
+	struct hostent* h;
 
 	/* Open UDP socket for our server */
 	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
@@ -48,19 +50,15 @@ bool dirRegister(char * snpip, char * port){
 		return -1;
 	}	
 	
-	/* Reset and set addr structure */
+
+	inet_pton(AF_INET, snpip, &temp);
+	h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
+	a=(struct in_addr*)h->h_addr_list[0];
+
 	memset((void*)&addr,(int)'\0',sizeof(addr));
 	addr.sin_family=AF_INET;
-	addr.sin_addr.s_addr=htonl(INADDR_ANY);
-	addr.sin_port=htons(port);
-
-	/* Assigning name to socket */
-	ret=bind(surDir_sock,(struct sockaddr*)&addr,sizeof(addr));
-	if(ret==-1){
-		printf("Error binding name to socket\n");
-		close(surDir_sock);
-		return -1;
-	}
+	addr.sin_addr=*a;
+	addr.sin_port=htons(atoi(port));
 
 	n=sendto(surDir_sock,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
 	if(n==-1) {
@@ -69,7 +67,6 @@ bool dirRegister(char * snpip, char * port){
 		close(surDir_sock);
 		return -1;
 	}
-
 
 	/* Registering with surname server                                * 
 	 * --NEEDS: Check if aport,surname,localip and snpport are valid  */
