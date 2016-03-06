@@ -36,134 +36,109 @@ int show_usage(){
 
 }
 
-bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char * my_port){
+char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	struct sockaddr_in addr;
 	struct in_addr *a;
-	int ret, n, addrlen;
-	char * msg;
+	int n, addrlen;
 	struct in_addr temp;
 	struct hostent* h;
-	char buffer[128];
-	char *answer;
-
-	sprintf(buffer,"REG %s;%s;%s\n",full_name,my_ip,my_port);
-
-	msg=malloc(strlen(buffer));
-	msg = buffer;
+	char buffer[512];
+	char * answer;
 
 	/* Open UDP socket for our server */
 	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
-		printf("error: %s\n",strerror(errno));
-		return -1;
+		printf("Error: %s\n",strerror(errno));
+		return NULL;
 	}	
 	
-
-	inet_pton(AF_INET, snpip, &temp);
+	inet_pton(AF_INET, dst_ip, &temp);
 	h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
 	a=(struct in_addr*)h->h_addr_list[0];
 
 	memset((void*)&addr,(int)'\0',sizeof(addr));
 	addr.sin_family=AF_INET;
 	addr.sin_addr=*a;
-	addr.sin_port=htons(atoi(port));
+	addr.sin_port=htons(atoi(dst_port));
 
 	n=sendto(surDir_sock,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
 	if(n==-1) {
-		printf("reg_sa: error sending to surname server\n");
+		printf("UDP error: sending message to the server\n");
 		free(msg);
 		close(surDir_sock);
-		return -1;
+		return NULL;
 	}
-
 
 	addrlen = sizeof(addr);
-	n=recvfrom(surDir_sock,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
+	n=recvfrom(surDir_sock,buffer,512,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
 	if(n==-1) {
-		printf("reg_sa: error receiving from surname server\n");
+		printf("UDP error: receiving message to the server\n");
 		free(msg);
 		close(surDir_sock);
-		return -1;
+		return NULL;
 	}
-	
-	answer=malloc(n);
 
+	answer=malloc(n);
 	sprintf(answer,"%.*s",n,buffer);
+
+	close(surDir_sock);
+
+	return answer;
+}
+
+
+bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char * my_port){
+	char * msg;
+	char buffer[512];
+	char * answer;
+
+	sprintf(buffer,"REG %s;%s;%s\n",full_name,my_ip,my_port);
+
+	msg = malloc(strlen(buffer));
+	msg = buffer;
+
+	answer = comUDP(msg, snpip, port);
+
+	if (answer == NULL){
+		printf("UDP error: empty message received\n");
+		close(surDir_sock);
+		return false;
+	}
+
 	if(strcmp(answer,"OK") != 0) {
 		printf("Error: %s\n",answer);
-		
-		close(surDir_sock);
 		return false;
 	}
 
 	printf("User registration successful!\n");
 
-	close(surDir_sock);
-
 	return true;
 }
 
+
 bool usrExit(char * snpip, char * port, char * full_name){
-	struct sockaddr_in addr;
-	struct in_addr *a;
-	int ret, n, addrlen;
-	char * msg;
-	struct in_addr temp;
-	struct hostent* h;
-	char buffer[128];
+	char buffer[512];
 	char *answer;
+	char * msg;
 
 	sprintf(buffer,"UNR %s\n",full_name);
 
-	msg=malloc(strlen(buffer));
+	msg = malloc(strlen(buffer));
 	msg = buffer;
 
-	/* Open UDP socket for our server */
-	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
-		printf("error: %s\n",strerror(errno));
-		return -1;
-	}	
-	
+	answer = comUDP(msg, snpip, port);
 
-	inet_pton(AF_INET, snpip, &temp);
-	h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
-	a=(struct in_addr*)h->h_addr_list[0];
-
-	memset((void*)&addr,(int)'\0',sizeof(addr));
-	addr.sin_family=AF_INET;
-	addr.sin_addr=*a;
-	addr.sin_port=htons(atoi(port));
-
-	n=sendto(surDir_sock,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
-	if(n==-1) {
-		printf("reg_sa: error sending to surname server\n");
-		free(msg);
-		close(surDir_sock);
-		return -1;
-	}
-
-
-	addrlen = sizeof(addr);
-	n=recvfrom(surDir_sock,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
-	if(n==-1) {
-		printf("reg_sa: error receiving from surname server\n");
-		free(msg);
-		close(surDir_sock);
-		return -1;
-	}
-	
-	answer=malloc(n);
-
-	sprintf(answer,"%.*s",n,buffer);
-	if(strcmp(answer,"OK") != 0) {
-		printf("Error: %s\n",answer);
-		
+	if (answer == NULL){
+		printf("UDP error: empty message received\n");
 		close(surDir_sock);
 		return false;
 	}
 
-	printf("User unregistered successful!\n");
+	if(strcmp(answer,"OK") != 0) {
+		printf("Error: %s\n",answer);
+		return false;
+	}
 
-	close(surDir_sock);
+	printf("User unregistered successful!\n");
 
 	return true;
 }
@@ -193,15 +168,9 @@ int main(int argc, char* argv[]) {
 	int lineCount = 2;
 
 	char usrIn[100];
-	struct hostent *h;
 	char options[10] = "n:s:q:i:p:";
 	char *in_name_surname = NULL ,*in_ip = NULL ,*in_scport = NULL,*in_snpip = NULL,*in_snpport = NULL;
-	char c;	
-	int fd, addrlen, ret, nread, port, aport;
-	struct sockaddr_in addr;
-	char buffer[128];
-	char *answer;
-	int ufile = 0;
+	char c;
 
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
