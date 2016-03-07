@@ -207,7 +207,8 @@ int unreg_sa(struct hostent* h, int aport, char* surname){
 *  Returns: 0 if successful
 *	    -1 if unsuccessful
 */
-int reg_user(char* buffer, int n, FILE *fd) {
+int reg_user(char* buffer, int n) {
+	FILE *ufile;
 	char name[128], surname[128], ip[128], port[128];
 	buffer[n] = '\0';
 	printf("\nreg_user: buffer received: %s\n",buffer);
@@ -220,11 +221,18 @@ int reg_user(char* buffer, int n, FILE *fd) {
 		printf("reg_user: Surname and servername don't match\n");
 		return -1;
 	}
-	if(fprintf(fd,"%s;%s;%s\n",name,ip,port) < 0) {
+
+	ufile = fopen(SRVFILE,"a");
+	if(ufile == NULL) {
+		printf("error: %s\n",strerror(errno));
+		return -1;
+	}
+	if(fprintf(ufile,"%s;%s;%s\n",name,ip,port) < 0) {
 		printf("reg_user: Error writing to file");
 		return -1;
 	}
 	printf("User registration successful!\n");
+	fclose(ufile);
 	return 1;
 }
 
@@ -232,7 +240,8 @@ int reg_user(char* buffer, int n, FILE *fd) {
 *  --------------------
 *  Unregisters a user
 */
-int unreg_user(char *buffer, int n, FILE *fp){
+int unreg_user(char *buffer, int n){
+	FILE *ufile;
 	char name[128],surname[128],temp[512];
 	int line;
 	buffer[n] = '\0';
@@ -246,20 +255,24 @@ int unreg_user(char *buffer, int n, FILE *fp){
 		return -1;
 	}
 
-	rewind(fp);	
-	while(fgets(temp,512,fp) != NULL) {
+	ufile = fopen(SRVFILE,"r+");
+	if(ufile == NULL) {
+		printf("error: %s\n", strerror(errno));
+		return -1;
+	}
+	while(fgets(temp,512,ufile) != NULL) {
 		if(strstr(temp,"NULL") != NULL) continue;
 		if((strstr(temp, name)) != NULL) {
-			line = ftell(fp);
-			fseek(fp,line-(int)strlen(temp),SEEK_SET);
-			if(fprintf(fp,"NULL") < 0) {
+			line = ftell(ufile);
+			fseek(ufile,line-(int)strlen(temp),SEEK_SET);
+			if(fprintf(ufile,"NULL") < 0) {
 				printf("unreg_user: error unregistering user\n");
 			}
-			fseek(fp,0L,SEEK_END);
+			fseek(ufile,0L,SEEK_END);
 			return 1;
 		}
 	}	
-	fseek(fp,0L,SEEK_END);
+	fseek(ufile,0L,SEEK_END);
 	return -1;	
 }
 
@@ -293,7 +306,6 @@ int main(int argc, char* argv[]) {
 	struct sockaddr_in addr;
 	char buffer[128];
 	char *answer;
-	FILE *ufile;
 	/* File descriptors, pointer */
 	int fd;
 	fd_set rfds;
@@ -397,13 +409,13 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 
-	/* Opening server file */
+	/* Opening server file 
 	ufile = fopen(SRVFILE,"w+");
 	if(ufile == NULL) {
 		printf("Error opening client file: %s\n", strerror(errno));
 		close(fd);
 		return -1;
-	}		
+	}*/		
 
 	/* Begin listening  */
 	printf("Welcome to our server!\n");
@@ -434,7 +446,7 @@ int main(int argc, char* argv[]) {
 			sprintf(answer,"%.*s",3,buffer);
 			printf("\nanswer is: %s\n",answer);	
 			if(strcmp(answer,"REG") == 0){
-				if(reg_user(buffer,nread,ufile) == -1) {
+				if(reg_user(buffer,nread) == -1) {
 					printf("error registering user\n");
 					if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1){
 						return -1;
@@ -448,7 +460,7 @@ int main(int argc, char* argv[]) {
 				}
 			}else if(strcmp(answer,"UNR")==0){
 				printf("Trying to unregister user...\n");
-				if(unreg_user(buffer,nread,ufile) == -1) {
+				if(unreg_user(buffer,nread) == -1) {
 					printf("error unregistering user\n");
 					if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1) {
 						printf("Error replying to user\n");
@@ -480,6 +492,5 @@ int main(int argc, char* argv[]) {
 	}
 	unreg_sa(h,aport,surname);	
 	close(fd);
-	fclose(ufile);
 	return 0;	
 }
