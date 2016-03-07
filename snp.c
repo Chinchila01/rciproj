@@ -16,6 +16,25 @@
 extern int errno;
 char* servername;
 
+/* Function: reset_file
+*  ---------------------
+*   Resets server file when server starts
+*
+*   returns: 0 if successful
+*            -1 if unsuccessful
+*/
+int reset_file(){
+	FILE *ufile;
+	ufile = fopen(SRVFILE,"w");
+	if(ufile == NULL) {
+		printf("reset_file: error: %s\n",strerror(errno));
+		return -1;
+	}
+	
+	fclose(ufile);
+	return 1;
+}
+
 /*
  * Function:  show_usage
  * --------------------
@@ -139,7 +158,7 @@ int unreg_sa(struct hostent* h, int aport, char* surname){
 	a=(struct in_addr*)h->h_addr_list[0];
 	fd=socket(AF_INET,SOCK_DGRAM,0);
 	if(fd==-1) {
-		printf("reg_sa: error opening socket\n");
+		printf("unreg_sa: error opening socket\n");
 		return -1;
 	}
 
@@ -153,7 +172,7 @@ int unreg_sa(struct hostent* h, int aport, char* surname){
 	msg = malloc(msglen*sizeof(char)+1);
 
 	if(sprintf(msg,"SUNR %s",surname) != (msglen)){
-		printf("reg_sa: error printing second message\n");
+		printf("unreg_sa: error printing second message\n");
 		free(msg);
 		close(fd);
 		return -1;
@@ -162,7 +181,7 @@ int unreg_sa(struct hostent* h, int aport, char* surname){
 	/* Sending it to the Surname Server */
 	n=sendto(fd,msg,msglen,0,(struct sockaddr*)&addr,sizeof(addr));
 	if(n==-1) {
-		printf("reg_sa: error sending to surname server\n");
+		printf("unreg_sa: error sending to surname server\n");
 		free(msg);
 		close(fd);
 		return -1;
@@ -172,7 +191,7 @@ int unreg_sa(struct hostent* h, int aport, char* surname){
 	addrlen = sizeof(addr);
 	n=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
 	if(n==-1) {
-		printf("reg_sa: error receiving from surname server\n");
+		printf("unreg_sa: error receiving from surname server\n");
 		free(msg);
 		close(fd);
 		return -1;
@@ -224,7 +243,7 @@ int reg_user(char* buffer, int n) {
 
 	ufile = fopen(SRVFILE,"a");
 	if(ufile == NULL) {
-		printf("error: %s\n",strerror(errno));
+		printf("reg_user: error: %s\n",strerror(errno));
 		return -1;
 	}
 	if(fprintf(ufile,"%s;%s;%s\n",name,ip,port) < 0) {
@@ -257,7 +276,7 @@ int unreg_user(char *buffer, int n){
 
 	ufile = fopen(SRVFILE,"r+");
 	if(ufile == NULL) {
-		printf("error: %s\n", strerror(errno));
+		printf("unreg_user: error: %s\n", strerror(errno));
 		return -1;
 	}
 	while(fgets(temp,512,ufile) != NULL) {
@@ -406,6 +425,12 @@ int main(int argc, char* argv[]) {
 	printf("Attempting surname registering...\n");
 	if(reg_sa(h,aport,surname,snpip,snpport)==-1) {
 		printf("error registering with surname server\n");	
+		return -1;
+	}
+
+	if(reset_file() == -1) {
+		printf("error resetting file\n");
+		close(fd);
 		return -1;
 	}
 
