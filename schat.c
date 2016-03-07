@@ -143,6 +143,34 @@ bool usrExit(char * snpip, char * port, char * full_name){
 	return true;
 }
 
+bool queryUser(char * snpip, char * port, char * user){
+	char buffer[512];
+	char *answer;
+	char * msg;
+
+	sprintf(buffer,"QRY %s\n",user);
+
+	msg = malloc(strlen(buffer));
+	msg = buffer;
+
+	answer = comUDP(msg, snpip, port);
+
+	if (answer == NULL){
+		printf("UDP error: empty message received\n");
+		close(surDir_sock);
+		return false;
+	}
+
+	if(strcmp(answer,"OK") != 0) {
+		printf("Error: %s\n",answer);
+		return false;
+	}
+
+	printf("User unregistered successful!\n");
+
+	return true;
+}
+
 /*
  * Function:  main
  * --------------------
@@ -252,7 +280,8 @@ int main(int argc, char* argv[]) {
 			usrExit(in_snpip, in_snpport,in_name_surname);
 
 		}else if(strcmp(usrIn,"find\n") == 0){
-
+			queryUser(in_snpip, in_snpport,"francisco.lelo");
+			
 		}else if(strcmp(usrIn,"connect\n") == 0){
 
 		}else if(strcmp(usrIn,"message\n") == 0){
