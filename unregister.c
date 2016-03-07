@@ -7,12 +7,20 @@
 #include <string.h>
 #include <netdb.h>
 
-int main(){
+int main(int argc, char* argv[]){
 	int fd,n,addrlen;
 	struct sockaddr_in addr;
 	struct hostent *h;
 	struct in_addr *a;
 	char buffer[128];
+	char * msg;
+
+	if (argc != 2){
+
+		printf("\nUps, you missed the argument.\nUsage: ./unregister surname\n\n");
+
+		return -1;
+	}
 
 	if((h=gethostbyname("tejo"))==NULL)exit(1);
 	a=(struct in_addr*)h->h_addr_list[0];
@@ -27,7 +35,14 @@ int main(){
 	addr.sin_addr=*a;
 	addr.sin_port=htons(58000);
 
-	n=sendto(fd,"SUNR lel",8,0,(struct sockaddr*)&addr,sizeof(addr));
+	sprintf(buffer,"SUNR %s",argv[1]);
+
+	msg = malloc(strlen(buffer));
+	msg = buffer;
+
+	printf("%d %s\n",strlen(msg),msg);
+
+	n=sendto(fd,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
 	if(n==-1){
 		printf("Unsuccessful\n");
 		exit(1);

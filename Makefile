@@ -7,8 +7,11 @@ snp: snp.c
 schat: schat.c
 	$(CC) $(CFLAGS) schat.c -o schat 
 
-test: test.c
-	$(CC) test.c -o test 
+unreguser:	unreguser.c
+	$(CC) $(CFLAGS) unreguser.c -o unreguser
 
-all: snp schat test
+unregister: unregister.c
+	$(CC) $(CFLAGS) unregister.c -o unregister
+
+all: snp schat unreguser unregister
 
