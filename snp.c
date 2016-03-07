@@ -16,6 +16,33 @@
 extern int errno;
 char* servername;
 
+/* Function: list_users
+*  -------------------
+*  Lists all users currently registered on the server
+* 
+*  returns: 0 if listed successfully
+*           -1 if listed unsuccessfully
+*/
+int list_users() {
+	FILE *ufile;
+	char buffer[512],uname[512],uip[512],uport[512];
+
+	ufile = fopen(SRVFILE,"r");
+	if(ufile == NULL) {
+		printf("list_users: error: %s\n", strerror(errno));
+		return -1;
+	}	
+
+	while(fgets(buffer,512,ufile) != NULL){
+		if(sscanf(buffer,"%[^';'];%[^';'];%s",uname,uip,uport) != 3) {
+			printf("list_users: error reading user file\n");
+		}
+		printf("%s.%s - %s - %s\n",uname,servername,uip,uport);
+	}
+	printf("list_users: Done!\n");
+	return 0;
+} 
+
 /* Function: reset_file
 *  ---------------------
 *   Resets server file when server starts
@@ -32,7 +59,7 @@ int reset_file(){
 	}
 	
 	fclose(ufile);
-	return 1;
+	return 0;
 }
 
 /*
@@ -513,6 +540,7 @@ int main(int argc, char* argv[]) {
 			len = strlen(localinput);
 			if(localinput[len-1] == '\n') localinput[len-1] = '\0';
 			if(strcmp(localinput,"exit") == 0) stop=1;
+			else if(strcmp(localinput,"list") == 0) list_users();
 		}
 	}
 	unreg_sa(h,aport,surname);	

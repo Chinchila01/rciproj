@@ -22,7 +22,7 @@ int main(int argc, char* argv[]){
 		return -1;
 	}
 
-	if((h=gethostbyname("tejo"))==NULL)exit(1);
+	if((h=gethostbyname("tejo.tecnico.ulisboa.pt"))==NULL)exit(1);
 	a=(struct in_addr*)h->h_addr_list[0];
 
 	printf("network address: %s\n",inet_ntoa(*a));
