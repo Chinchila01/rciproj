@@ -285,6 +285,12 @@ int reg_user(char* buffer, int n) {
 /* Function: unreg_user
 *  --------------------
 *  Unregisters a user
+*
+*  buffer: message received from client
+*  n: number of bytes read
+*
+*  returns: -1 if unregister is unsuccessful
+*           0 if unregister is successful
 */
 int unreg_user(char *buffer, int n){
 	FILE *ufile;
@@ -322,6 +328,88 @@ int unreg_user(char *buffer, int n){
 	return -1;	
 }
 
+/* Function: qry_asrv
+*  -------------------
+*  surname: surname to query the surname server
+*
+*  h: structure with address information
+*  aport: surname server port
+*  surname: surname to query address
+*
+*  returns: string w/ reply from surname server in the format surname;snpip;snpport
+*           empty string if not successfull
+*/
+char* qry_asrv(struct hostent* h, int aport, char* surname) {
+	int fd,n,addrlen,la;
+	struct sockaddr_in addr;
+	struct in_addr *a;
+	int msglen = strlen("SQRY ") + strlen(surname);
+	char* query = malloc(msglen*sizeof(char) + 1);
+	char* answer;
+	char buffer[512];
+
+	a=(struct in_addr*)h->h_addr_list[0];
+	fd=socket(AF_INET,SOCK_DGRAM,0);
+	if(fd==-1) {
+		printf("qry_asrv: error opening socket\n");
+		return "";
+	}
+
+	memset((void*)&addr,(int)'\0',sizeof(addr));
+	addr.sin_family=AF_INET;
+	addr.sin_addr=*a;
+	addr.sin_port=htons(aport);
+
+	if((la = sprintf(query,"SQRY %s",surname)) != (msglen)){
+		printf("qry_asrv: error printing message\n");
+		free(query);
+		close(fd);
+		return "";
+	}	
+
+	/* Sending it to the Surname Server */
+	n=sendto(fd,query,msglen,0,(struct sockaddr*)&addr,sizeof(addr));
+	if(n==-1) {
+		printf("qry_asrv: error sending to surname server\n");
+		free(query);
+		close(fd);
+		return "";
+	}
+
+	/* Receiving to check if OK */
+	addrlen = sizeof(addr);
+	n=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
+	if(n==-1) {
+		printf("qry_asrv: error receiving from surname server\n");
+		free(query);
+		close(fd);
+		return "";
+	}
+
+	answer = malloc(n);
+
+	sprintf(answer,"%.*s",n,buffer);
+
+	free(query);	
+	close(fd);
+	printf("qry_asrv: Successful!\n");
+	return answer;
+}
+
+/* Function: qry_namesrv
+*  -------------------
+*  surname: surname to query the proper name server
+*
+*  snpip: proper name server ip 
+*  snpport: proper name server port
+*  surname: surname to query address
+*
+*  returns: string w/ reply from proper name server in the format surname;snpip;snpport
+*           empty string if not successfull
+*/
+int qry_namesrv(char* snpip, char* snpport, char* surname) {
+	return 0;
+}
 /*
  * Function:  main
  * --------------------
@@ -541,6 +629,7 @@ int main(int argc, char* argv[]) {
 			if(localinput[len-1] == '\n') localinput[len-1] = '\0';
 			if(strcmp(localinput,"exit") == 0) stop=1;
 			else if(strcmp(localinput,"list") == 0) list_users();
+			else if(strcmp(localinput,"query") == 0) printf("query: %s\n",qry_asrv(h,aport,"lel"));
 		}
 	}
 	unreg_sa(h,aport,surname);	
