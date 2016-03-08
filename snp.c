@@ -34,10 +34,12 @@ int list_users() {
 	}	
 
 	while(fgets(buffer,512,ufile) != NULL){
-		if(sscanf(buffer,"%[^';'];%[^';'];%s",uname,uip,uport) != 3) {
-			printf("list_users: error reading user file\n");
+		if(strstr(buffer,"NULL") == 0) {
+			if(sscanf(buffer,"%[^';'];%[^';'];%s",uname,uip,uport) != 3) {
+				printf("list_users: error reading user file\n");
+			}
+			printf("%s.%s - %s - %s\n",uname,servername,uip,uport);
 		}
-		printf("%s.%s - %s - %s\n",uname,servername,uip,uport);
 	}
 	printf("list_users: Done!\n");
 	return 0;
@@ -407,8 +409,73 @@ char* qry_asrv(struct hostent* h, int aport, char* surname) {
 *  returns: string w/ reply from proper name server in the format surname;snpip;snpport
 *           empty string if not successfull
 */
-int qry_namesrv(char* snpip, char* snpport, char* surname) {
-	return 0;
+char* qry_namesrv(char* snpip, char* snpport, char* firstname, char* surname) {
+	int fd,n,addrlen;
+	struct hostent* h;
+	struct in_addr* a;
+	struct sockaddr_in addr;
+	struct in_addr temp;
+	int port;
+	int msglen = strlen("QRY ") + strlen(firstname) + strlen(".") + strlen(surname);
+	char* query = malloc(msglen*sizeof(char)+1);
+	char buffer[512];
+	char* answer;
+
+	if(sprintf(query,"QRY %s.%s",firstname,surname) != (msglen)){
+		printf("qry_namesrv: error printing message\n");
+		free(query);
+		return "";
+	}
+
+	/* Converting ip and creating h struct */
+	inet_pton(AF_INET, snpip, &temp);
+	if((h=gethostbyaddr(&temp,sizeof(temp),AF_INET))==NULL){
+		printf("qry_namesrv: Couldn't reach np server\n");
+		return "";
+	}
+	/* Converting port number */
+	port = atoi(snpport);
+
+	/* Opening socket */
+	fd=socket(AF_INET,SOCK_DGRAM,0);
+	if(fd == -1) {
+		printf("qry_namesrv: error: %s\n",strerror(errno));
+	}
+
+	a=(struct in_addr*)h->h_addr_list[0];
+
+	memset((void*)&addr,(int)'\0',sizeof(addr));
+	addr.sin_family=AF_INET;
+	addr.sin_addr=*a;
+	addr.sin_port=htons(port);
+
+	/* Sending it to the name Server */
+	n=sendto(fd,query,msglen,0,(struct sockaddr*)&addr,sizeof(addr));
+	if(n==-1) {
+		printf("qry_namesrv: error sending to surname server\n");
+		free(query);
+		close(fd);
+		return "";
+	}
+
+	/* Receiving to check if OK */
+	addrlen = sizeof(addr);
+	n=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
+	if(n==-1) {
+		printf("qry_namesrv: error receiving from surname server\n");
+		free(query);
+		close(fd);
+		return "";
+	}
+
+	answer = malloc(n);
+
+	sprintf(answer,"%.*s",n,buffer);
+
+	free(query);	
+	close(fd);
+	printf("qry_asrv: Successful!\n");
+	return answer;
 }
 /*
  * Function:  main
@@ -566,7 +633,7 @@ int main(int argc, char* argv[]) {
 		maxfd=fd;
 
 		if(select(maxfd+1,&rfds,NULL,NULL,NULL)<0){
-			printf("Select() error\n");
+			printf("Select() error: %s\n",strerror(errno));
 			return -1;
 		}
 
@@ -613,6 +680,9 @@ int main(int argc, char* argv[]) {
 				}
 			}else {
 				printf("Command not recognized\n");
+				if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1){
+						printf("Error replying to user\n");
+					}
 			}
 
 			printf("Sending bytes back\n");
@@ -630,6 +700,7 @@ int main(int argc, char* argv[]) {
 			if(strcmp(localinput,"exit") == 0) stop=1;
 			else if(strcmp(localinput,"list") == 0) list_users();
 			else if(strcmp(localinput,"query") == 0) printf("query: %s\n",qry_asrv(h,aport,"lel"));
+			else if(strcmp(localinput,"npquery") == 0) printf("query: %s\n",qry_namesrv("127.0.0.1","9000","afhah","lel"));
 		}
 	}
 	unreg_sa(h,aport,surname);	
