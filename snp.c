@@ -259,6 +259,7 @@ int unreg_sa(struct hostent* h, int aport, char* surname){
 char* reg_user(char* buffer, int n) {
 	FILE *ufile;
 	char name[128], surname[128], ip[128], port[128];
+	char temp[512];
 	buffer[n] = '\0';
 
 	if(sscanf(buffer,"REG %[^'.'].%[^';'];%[^';'];%s",name,surname,ip,port)!= 4){
@@ -276,8 +277,24 @@ char* reg_user(char* buffer, int n) {
 		printf("reg_user: error: %s\n",strerror(errno));
 		return "NOK - Client list not accessible";
 	}
+
+	printf("reg_user: Checking username uniqueness\n");
+	/* Checking username is unique */
+	fseek(ufile,0L,SEEK_SET);
+	while(fgets(temp,512,ufile) != NULL) {
+		printf("lel\n");
+		if(strstr(temp,"#") != NULL) continue;
+		if((strstr(temp, name)) != NULL) {
+			printf("User name not unique :(\n");
+			fclose(ufile);
+			return "NOK - Username not unique";
+		}
+	}	
+	fseek(ufile,0L,SEEK_END);
+
 	if(fprintf(ufile,"%s;%s;%s\n",name,ip,port) < 0) {
 		printf("reg_user: Error writing to file");
+		fclose(ufile);
 		return "NOK - Client list not writable";
 	}
 	printf("New user registration!\n");
@@ -488,19 +505,22 @@ char* qry_namesrv(char* snpip, char* snpport, char* firstname, char* surname) {
 *   returns: string with info of user if successful
 *            string with NOK if unsuccessful
 */
-char* find_user(char* buffer,int n,struct hostent *h, int aport,char* localip, char* localport) {
+char* find_user(char* buffer,int n,struct hostent *h, int aport) {
 	int found = 0;
 	char name[128];
 	char surname[128];
 	char temp[512];
 	char snpip[128],snpport[128];
+	char uip[128],uport[128];
+	char buff2[512];
 	char* reply;
 	FILE *ufile;
-	/*buffer[n] = '\0';*/
 
 	printf("find_user: starting...\n");
+	sprintf(buff2,"%s\n",buffer);
+	buff2[n] = '\0';
 
-	if(sscanf(buffer,"QRY %[^'.'].%[^';']",name,surname) != 2){
+	if(sscanf(buff2,"QRY %[^'.'].%s",name,surname) != 2){
 		return "NOK - Query badly formatted";
 	}
 
@@ -513,13 +533,14 @@ char* find_user(char* buffer,int n,struct hostent *h, int aport,char* localip, c
 		while(fgets(temp,512,ufile) != NULL){
 			if((strstr(temp,"#") == NULL) && (strstr(temp,name) != NULL)) {
 				printf("find_user: found\n");
+				sscanf(temp,"%[^';'];%[^';'];%s", name,uip,uport);
 				found = 1;
 				break;
 			}
 		}
 		if(found != 1) return "NOK - User not found";
-		reply = malloc((7+strlen(name)+strlen(surname)+strlen(localip)+strlen(localport))*sizeof(char)+1);
-		sprintf(reply,"RPL %s.%s;%s;%s",name,surname,localip,localport);
+		reply = malloc((7+strlen(name)+strlen(surname)+strlen(uip)+strlen(uport))*sizeof(char)+1);
+		sprintf(reply,"RPL %s.%s;%s;%s",name,surname,uip,uport);
 		fclose(ufile);
 	}
 	else {
@@ -721,7 +742,7 @@ int main(int argc, char* argv[]) {
 					printf("Error replying to user\n");
 				}
 			}else if(strcmp(answer,"QRY")==0){
-				reply = find_user(buffer,nread,h,aport,snpip,snpport);
+				reply = find_user(buffer,nread,h,aport);
 				if(sendto(fd,reply,strlen(reply),0,(struct sockaddr*)&addr,addrlen) == -1){
 					printf("Error replying to user\n");
 				}
@@ -750,7 +771,7 @@ int main(int argc, char* argv[]) {
 			else if(strcmp(localinput,"npquery") == 0) printf("query: %s\n",qry_namesrv("127.0.0.1","9000","afhah","lel"));
 			else if(strcmp(localinput,"finduser") == 0){
 				printf("Finding user\n");
-				find_user("QRY afhah.lel",13,h,aport,snpip,snpport);
+				find_user("QRY afhah.lel",13,h,aport);
 			}
 		}
 	}
