@@ -68,8 +68,13 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 		return NULL;
 	}
 
+	printf("YEAAAAAAAAAAAAAAAH SENT\n");
+
 	addrlen = sizeof(addr);
 	n=recvfrom(surDir_sock,buffer,512,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
+
+	printf("YEAAAAAAAAAAAAAAAH RECEIVED\n");	
+
 	if(n==-1) {
 		printf("UDP error: receiving message to the server\n");
 		free(msg);
@@ -79,6 +84,8 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 
 	answer=malloc(n);
 	sprintf(answer,"%.*s",n,buffer);
+
+	printf("RAW ANSWER: %s\n",answer);
 
 	close(surDir_sock);
 
@@ -153,7 +160,13 @@ bool queryUser(char * snpip, char * port, char * user){
 	msg = malloc(strlen(buffer));
 	msg = buffer;
 
+	printf("\n%s\n\n", msg);
+
 	answer = comUDP(msg, snpip, port);
+
+	printf("answer:\n");
+
+	printf("%s\n", answer);
 
 	if (answer == NULL){
 		printf("UDP error: empty message received\n");
@@ -199,6 +212,8 @@ int main(int argc, char* argv[]) {
 	char options[10] = "n:s:q:i:p:";
 	char *in_name_surname = NULL ,*in_ip = NULL ,*in_scport = NULL,*in_snpip = NULL,*in_snpport = NULL;
 	char c;
+	char buffer[512];
+	char * name2connect;
 
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
@@ -253,7 +268,7 @@ int main(int argc, char* argv[]) {
 		while (fgets(ip_path, sizeof(ip_path)-1, fp_ip) != NULL) {
 			lineCount--;
 			if (lineCount == 0){
-				sscanf(ip_path,"%s %[^'/']%s",garb_0,ip);
+				sscanf(ip_path,"%s %[^'/']%s",garb_0,ip, garb_0);
 			}
 		}
 
@@ -279,10 +294,49 @@ int main(int argc, char* argv[]) {
 		}else if(strcmp(usrIn,"leave\n") == 0){
 			usrExit(in_snpip, in_snpport,in_name_surname);
 
-		}else if(strcmp(usrIn,"find\n") == 0){
-			queryUser(in_snpip, in_snpport,"francisco.lelo");
+		}else if(strstr(usrIn,"find") != NULL){
+
+			sscanf(usrIn,"find %s", buffer);
+
+			name2connect = malloc(strlen(buffer));
+
+			name2connect = buffer;
+
+			queryUser(in_snpip, in_snpport, name2connect);
 			
 		}else if(strcmp(usrIn,"connect\n") == 0){
+
+			/*
+			int fd, addrlen, newfd;
+			struct sockaddr_in addr;
+			int n, nw;
+			char *ptr, buffer[128];
+
+			if((fd=socket(AF_INET,SOCK_STREAM,0))==-1)exit(1);//error
+			
+			memset((void*)&addr,(int)'\0',sizeof(addr));
+			addr.sin_family=AF_INET;
+			addr.sin_addr.s_addr=htonl(INADDR_ANY);
+			addr.sin_port=htons(9000);
+			
+			if(bind(fd,(struct sockaddr*)&addr,sizeof(addr))==-1)
+				exit(1);//error
+			
+			if(listen(fd,5)==-1)exit(1);//error
+			
+			while(1){addrlen=sizeof(addr);
+			
+			if((newfd=accept(fd,(struct sockaddr*)&addr,&addrlen))==-1)
+				exit(1);//error
+			
+			while((n=read(newfd,buffer,128))!=0){if(n==-1)exit(1);//error
+				ptr=&buffer[0];
+			
+			while(n>0){if((nw=write(newfd,ptr,n))<=0)exit(1);//error
+				n-=nw; ptr+=nw;}
+			}
+				close(newfd);
+			}*/
 
 		}else if(strcmp(usrIn,"message\n") == 0){
 
@@ -290,6 +344,7 @@ int main(int argc, char* argv[]) {
 
 		}else if(strcmp(usrIn,"exit\n") == 0){
 			// close connections
+			printf("Exiting..\n");
 			break;
 		}else{
 			printf("You are not allowed to do that my friend.\n");
