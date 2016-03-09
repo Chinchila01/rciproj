@@ -34,7 +34,7 @@ int list_users() {
 	}	
 
 	while(fgets(buffer,512,ufile) != NULL){
-		if(strstr(buffer,"NULL") == 0) {
+		if(strstr(buffer,"#") == NULL) {
 			if(sscanf(buffer,"%[^';'];%[^';'];%s",uname,uip,uport) != 3) {
 				printf("list_users: error reading user file\n");
 			}
@@ -42,6 +42,7 @@ int list_users() {
 		}
 	}
 	printf("list_users: Done!\n");
+	fclose(ufile);
 	return 0;
 } 
 
@@ -315,11 +316,11 @@ int unreg_user(char *buffer, int n){
 		return -1;
 	}
 	while(fgets(temp,512,ufile) != NULL) {
-		if(strstr(temp,"NULL") != NULL) continue;
+		if(strstr(temp,"#") != NULL) continue;
 		if((strstr(temp, name)) != NULL) {
 			line = ftell(ufile);
 			fseek(ufile,line-(int)strlen(temp),SEEK_SET);
-			if(fprintf(ufile,"NULL") < 0) {
+			if(fprintf(ufile,"#") < 0) {
 				printf("unreg_user: error unregistering user\n");
 			}
 			fseek(ufile,0L,SEEK_END);
@@ -474,8 +475,65 @@ char* qry_namesrv(char* snpip, char* snpport, char* firstname, char* surname) {
 
 	free(query);	
 	close(fd);
-	printf("qry_asrv: Successful!\n");
+	printf("qry_namesrv: Successful!\n");
 	return answer;
+}
+
+/* Function: find_user
+*  -----------------------
+*
+*   Uses qry_aserv or qry_namesrv if needed to find the location of a user
+*
+*   returns: string with info of user if successful
+*            string with NOK if unsuccessful
+*/
+char* find_user(char* buffer,int n,struct hostent *h, int aport,char* localip, char* localport) {
+	int found = 0;
+	char name[128];
+	char surname[128];
+	char temp[512];
+	char snpip[128],snpport[128];
+	char* reply;
+	FILE *ufile;
+	/*buffer[n] = '\0';*/
+
+	printf("find_user: starting...\n");
+
+	if(sscanf(buffer,"QRY %[^'.'].%[^';']",name,surname) != 2){
+		return "NOK - Query badly formatted";
+	}
+
+	printf("find_user: searching for %s.%s\n",name,surname);
+
+	if(strcmp(surname,servername) == 0) {
+		/* Search on our file */
+		ufile = fopen(SRVFILE,"r");
+		if(ufile == NULL) return "NOK - client list unreachable";
+		while(fgets(temp,512,ufile) != NULL){
+			if((strstr(temp,"#") == NULL) && (strstr(temp,name) != NULL)) {
+				printf("find_user: found\n");
+				found = 1;
+				break;
+			}
+		}
+		if(found != 1) return "NOK - User not found";
+		reply = malloc((7+strlen(name)+strlen(surname)+strlen(localip)+strlen(localport))*sizeof(char)+1);
+		sprintf(reply,"RPL %s.%s;%s;%s",name,surname,localip,localport);
+		fclose(ufile);
+	}
+	else {
+		/* Query surname server */
+		reply = qry_asrv(h, aport, surname);
+		if(strcmp(reply,"") == 0) printf("find_user: not found");
+		if(sscanf(reply,"SRPL %[^';'];%[^';'];%s",surname,snpip,snpport) != 3) return "NOK - Reply not parseable";
+
+		/* Query np server */	
+		reply = qry_namesrv(snpip, snpport, name, surname);
+		if(strcmp(reply,"") == 0) printf("find_user: not found\n");
+		/* return the reply*/
+		printf("find_user: reply: %s\n",reply);
+	}
+	return reply;
 }
 /*
  * Function:  main
@@ -501,6 +559,7 @@ int main(int argc, char* argv[]) {
 	char options[10] = "n:s:q:i:p:";
 	char localinput[512];
 	char *surname = NULL ,*snpip = NULL ,*snpport = NULL,*saip = NULL,*saport = NULL;
+	char *reply;
 	char c;	
 	int len,addrlen, ret, nread, port, aport;
 	struct in_addr temp;
@@ -678,6 +737,12 @@ int main(int argc, char* argv[]) {
 						printf("Error replying to user\n");
 					}
 				}
+			}else if(strcmp(answer,"QRY")==0){
+				printf("Finding user\n");
+				reply = find_user(buffer,nread,h,aport,snpip,snpport);
+				if(sendto(fd,reply,strlen(reply),0,(struct sockaddr*)&addr,addrlen) == -1){
+					printf("Error replying to user\n");
+				}
 			}else {
 				printf("Command not recognized\n");
 				if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1){
@@ -701,6 +766,10 @@ int main(int argc, char* argv[]) {
 			else if(strcmp(localinput,"list") == 0) list_users();
 			else if(strcmp(localinput,"query") == 0) printf("query: %s\n",qry_asrv(h,aport,"lel"));
 			else if(strcmp(localinput,"npquery") == 0) printf("query: %s\n",qry_namesrv("127.0.0.1","9000","afhah","lel"));
+			else if(strcmp(localinput,"finduser") == 0){
+				printf("Finding user\n");
+				find_user("QRY afhah.lel",13,h,aport,snpip,snpport);
+			}
 		}
 	}
 	unreg_sa(h,aport,surname);	
