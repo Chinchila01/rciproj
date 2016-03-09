@@ -256,33 +256,33 @@ int unreg_sa(struct hostent* h, int aport, char* surname){
 *  Returns: 0 if successful
 *	    -1 if unsuccessful
 */
-int reg_user(char* buffer, int n) {
+char* reg_user(char* buffer, int n) {
 	FILE *ufile;
 	char name[128], surname[128], ip[128], port[128];
 	buffer[n] = '\0';
-	printf("\nreg_user: buffer received: %s\n",buffer);
+
 	if(sscanf(buffer,"REG %[^'.'].%[^';'];%[^';'];%s",name,surname,ip,port)!= 4){
 		printf("reg_user: Message format not recognized\n");
-		return -1;
+		return "NOK - Message format not recognized";
 	}
 
 	if(strcmp(servername,surname) != 0){
 		printf("reg_user: Surname and servername don't match\n");
-		return -1;
+		return "NOK - Surname and Servername don't match";
 	}
 
 	ufile = fopen(SRVFILE,"a");
 	if(ufile == NULL) {
 		printf("reg_user: error: %s\n",strerror(errno));
-		return -1;
+		return "NOK - Client list not accessible";
 	}
 	if(fprintf(ufile,"%s;%s;%s\n",name,ip,port) < 0) {
 		printf("reg_user: Error writing to file");
-		return -1;
+		return "NOK - Client list not writable";
 	}
-	printf("User registration successful!\n");
+	printf("New user registration!\n");
 	fclose(ufile);
-	return 1;
+	return "OK";
 }
 
 /* Function: unreg_user
@@ -295,25 +295,25 @@ int reg_user(char* buffer, int n) {
 *  returns: -1 if unregister is unsuccessful
 *           0 if unregister is successful
 */
-int unreg_user(char *buffer, int n){
+char* unreg_user(char *buffer, int n){
 	FILE *ufile;
 	char name[128],surname[128],temp[512];
 	int line;
 	buffer[n] = '\0';
 	if(sscanf(buffer,"UNR %[^'.'].%s",name,surname) != 2){
 		printf("unreg_user: Message format not recognized\n");
-		return -1;
+		return "NOK - Message format not recognized";
 	}
 
 	if(strcmp(servername,surname) != 0) {
 		printf("unreg_user: Surname and Server name don't match\n");
-		return -1;
+		return "NOK - Surname and Server name don't match";
 	}
 
 	ufile = fopen(SRVFILE,"r+");
 	if(ufile == NULL) {
 		printf("unreg_user: error: %s\n", strerror(errno));
-		return -1;
+		return "NOK - Client List not accessible";
 	}
 	while(fgets(temp,512,ufile) != NULL) {
 		if(strstr(temp,"#") != NULL) continue;
@@ -324,11 +324,12 @@ int unreg_user(char *buffer, int n){
 				printf("unreg_user: error unregistering user\n");
 			}
 			fseek(ufile,0L,SEEK_END);
-			return 1;
+			printf("User unregistered :(\n");
+			return "OK";
 		}
 	}	
 	fseek(ufile,0L,SEEK_END);
-	return -1;	
+	return "NOK - Username not found";	
 }
 
 /* Function: qry_asrv
@@ -704,41 +705,22 @@ int main(int argc, char* argv[]) {
 				close(fd);
 				return -1;
 			}
-			write(1,"echo: ",6);
-			write(1,buffer,nread);
 
 			/* Parsing... */
 			answer = malloc(3);
 			sprintf(answer,"%.*s",3,buffer);
-			printf("\nanswer is: %s\n",answer);	
+
 			if(strcmp(answer,"REG") == 0){
-				if(reg_user(buffer,nread) == -1) {
-					printf("error registering user\n");
-					if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1){
-						return -1;
-					}
-					return -1;
-				}else{
-					if(sendto(fd,"OK",2,0,(struct sockaddr*)&addr,addrlen) == -1) {
-						printf("Error: %s\n",strerror(errno));
-						return -1;
-					}
+				reply = reg_user(buffer,nread);
+				if(sendto(fd,reply,strlen(reply),0,(struct sockaddr*)&addr,addrlen) == -1){
+					printf("Error replying to user\n");
 				}
 			}else if(strcmp(answer,"UNR")==0){
-				printf("Trying to unregister user...\n");
-				if(unreg_user(buffer,nread) == -1) {
-					printf("error unregistering user\n");
-					if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1) {
-						printf("Error replying to user\n");
-					}
-				}else{
-					printf("Unregistration successful\n");
-					if(sendto(fd,"OK",2,0,(struct sockaddr*)&addr,addrlen) == -1){
-						printf("Error replying to user\n");
-					}
+				reply = unreg_user(buffer,nread);
+				if(sendto(fd,reply,strlen(reply),0,(struct sockaddr*)&addr,addrlen) == -1) {
+					printf("Error replying to user\n");
 				}
 			}else if(strcmp(answer,"QRY")==0){
-				printf("Finding user\n");
 				reply = find_user(buffer,nread,h,aport,snpip,snpport);
 				if(sendto(fd,reply,strlen(reply),0,(struct sockaddr*)&addr,addrlen) == -1){
 					printf("Error replying to user\n");
