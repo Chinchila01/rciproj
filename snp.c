@@ -272,7 +272,12 @@ char* reg_user(char* buffer, int n) {
 		return "NOK - Surname and Servername don't match";
 	}
 
-	ufile = fopen(SRVFILE,"a");
+	if(strcmp(name,"#") == 0){
+		printf("reg_user: User tried registering a name with # character\n");
+		return "NOK - Special character # is not allowed";
+	}
+
+	ufile = fopen(SRVFILE,"a+");
 	if(ufile == NULL) {
 		printf("reg_user: error: %s\n",strerror(errno));
 		return "NOK - Client list not accessible";
