@@ -1,0 +1,11 @@
+CC=gcc
+CFLAGS=-Wall -pedantic
+
+main: main.c
+	$(CC) $(CFLAGS) main.c -o main 
+
+schat: schat.c
+	$(CC) $(CFLAGS) schat.c -o schat 
+
+all: main schat
+
