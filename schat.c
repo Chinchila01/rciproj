@@ -1,3 +1,5 @@
+#include <sys/time.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +12,8 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <errno.h>
+
+#define max(A,B) ((A)>=(B)?(A):(B))
 
 typedef int bool;
 #define true 1
@@ -221,6 +225,16 @@ int main(int argc, char* argv[]) {
 	int n, nw;
 	char *ptr;
 
+	int fd_out;
+	struct sockaddr_in addr_out;
+	char * dst_ip = "127.0.0.1";
+	struct in_addr temp;
+	struct hostent* h;
+	struct in_addr *a;
+
+	fd_set rfds;
+	int maxfd, counter;
+
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
 		switch(c)
@@ -291,35 +305,61 @@ int main(int argc, char* argv[]) {
 
 	printf("Connection Data:\nLocalhost:%s:%s\nSurname Server:%s:%s\n",in_ip,in_scport,in_snpip,in_snpport);
 
+
+	if((fd=socket(AF_INET,SOCK_STREAM,0))==-1)exit(1);//error
+			
+	memset((void*)&addr,(int)'\0',sizeof(addr));
+	addr.sin_family=AF_INET;
+	addr.sin_addr.s_addr=htonl(INADDR_ANY);
+	addr.sin_port=htons(7000);
+
+	if(bind(fd,(struct sockaddr*)&addr,sizeof(addr))==-1){
+		printf("ERROR: Cannot bind.\n");
+		exit(1);//error
+	}
+
+	if(listen(fd,5)==-1){
+		printf("ERRO\n");
+		exit(1);//error
+	}
+
 	while(1){
-		fgets(usrIn,100,stdin);
 
-		if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
-			usrRegister(in_snpip, in_snpport,in_name_surname,in_ip,in_scport);
+		FD_ZERO(&rfds);
+		FD_SET(fileno(stdin),&rfds);
+		FD_SET(fd,&rfds);
+		FD_SET(newfd,&rfds);
+			
+		maxfd = fileno(stdin);
+		maxfd = max(maxfd,fileno(stdin));
+		maxfd = max(maxfd,fileno(stdin));
 
-			if((fd=socket(AF_INET,SOCK_STREAM,0))==-1)exit(1);//error
-			memset((void*)&addr,(int)'\0',sizeof(addr));
-			addr.sin_family=AF_INET;
-			addr.sin_addr.s_addr=htonl(INADDR_ANY);
-			addr.sin_port=htons(7000);
+		counter=select(maxfd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,(struct timeval *)NULL);
+ 		if(counter<=0) exit(1);
 
-			if(bind(fd,(struct sockaddr*)&addr,sizeof(addr))==-1)
-			 exit(1);//error
-
-			if(listen(fd,5)==-1)exit(1);//error
-
-
-
-			while(1){addrlen=sizeof(addr);
+ 		if(FD_ISSET(fileno(stdin),&rfds)){
+			printf("YOO\n");
+			fgets(usrIn,100,stdin);
+		}
 
 
-			if((newfd=accept(fd,(struct sockaddr*)&addr,&addrlen))==-1)
+
+		if(FD_ISSET(fd,&rfds)){
+			printf("FDDDD ????\n");
+
+			addrlen=sizeof(addr);
+
+			if((newfd=accept(fd,(struct sockaddr*)&addr,&addrlen))==-1){
+				printf("ERROR: Cannot start listening TCP.\n");
 				exit(1); //error
+			}
+		}
 
-			printf("entra no while\n");
+		if(FD_ISSET(newfd,&rfds)){
+			printf("YOO ACCEPT YOO\n");
 
-			while(1){
 
+				/*
 				while((n=read(newfd,buffer,512))!=0){
 
 					printf("BAM: %s\n", buffer);
@@ -339,18 +379,24 @@ int main(int argc, char* argv[]) {
 					 	n-=nw; ptr+=nw;
 
 					 }
-				}
-			}
-			
-			close(newfd);
-			
-			}
-/* close(fd); exit(0); */
+				}*/
+		}
 
-			 printf("YOOOOLLOOOO\n");
+		if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
+			usrRegister(in_snpip, in_snpport,in_name_surname,in_ip,in_scport);
+
+			
+			
+
+
+			
+
+
+			/* close(fd); exit(0); */
 
 		}else if(strcmp(usrIn,"leave\n") == 0){
 			usrExit(in_snpip, in_snpport,in_name_surname);
+			close(newfd);
 
 		}else if(strstr(usrIn,"find") != NULL){
 
@@ -363,6 +409,27 @@ int main(int argc, char* argv[]) {
 			queryUser(in_snpip, in_snpport, name2connect);
 			
 		}else if(strcmp(usrIn,"connect\n") == 0){
+
+			fd_out=socket(AF_INET,SOCK_STREAM,0);//TCP socket
+
+			if(fd_out==-1){
+				printf("FAIL\n");
+				return -1;//error
+			}
+
+			inet_pton(AF_INET, dst_ip, &temp);
+			h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
+			a=(struct in_addr*)h->h_addr_list[0];
+
+			memset((void*)&addr_out,(int)'\0',sizeof(addr_out));
+
+			addr_out.sin_family=AF_INET;
+			addr_out.sin_addr=*a;
+			addr_out.sin_port=htons(7000);
+
+			n=connect(fd_out,(struct sockaddr*)&addr_out,sizeof(addr_out));
+
+			printf("LIGOU\n");
 
 			if(stateMachine == onChat){
 /*
@@ -392,7 +459,11 @@ int main(int argc, char* argv[]) {
 					close(newfd);
 				}*/
 			}
-		}else if(strcmp(usrIn,"message\n") == 0){
+		}else if(strstr(usrIn,"message") != NULL){
+
+			sscanf(usrIn,"message %s", buffer);
+
+			write(fd_out,buffer,strlen(buffer)); //stdout
 
 		}else if(strcmp(usrIn,"disconnect\n") == 0){
 
@@ -400,6 +471,7 @@ int main(int argc, char* argv[]) {
 
 			// checkar se nao fizemos leave antes !!!!!!!!!!!!! - maquina de estados
 			usrExit(in_snpip, in_snpport,in_name_surname);
+			close(newfd);
 
 			printf("Exiting..\n");
 			break;

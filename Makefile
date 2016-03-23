@@ -13,4 +13,7 @@ unreguser:	unreguser.c
 unregister: unregister.c
 	$(CC) $(CFLAGS) unregister.c -o unregister
 
-all: snp schat unreguser unregister
+tcp_connect.c: tcp_connect.c
+	$(CC) $(CFLAGS) tcp_connect.c -o tcp_connect
+
+all: snp schat unreguser unregister tcp_connect
