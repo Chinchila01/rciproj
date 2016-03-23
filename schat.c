@@ -135,7 +135,6 @@ bool usrExit(char * snpip, char * port, char * full_name){
 	sprintf(buffer,"UNR %s\n",full_name);
 
 	msg = malloc(strlen(buffer));
-	msg = buffer;
 
 	answer = comUDP(msg, snpip, port);
 
@@ -309,7 +308,7 @@ int main(int argc, char* argv[]) {
 
 		counter=select(maxfd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,(struct timeval *)NULL);
  		
- 		if(counter < 0){
+ 		if(counter == -1){
  			printf("ERROR: %s\n",strerror(errno));
  			exit(1);
  		}
@@ -339,16 +338,18 @@ int main(int argc, char* argv[]) {
 		if(FD_ISSET(newfd,&rfds)){
 			printf("YOO ACCEPT YOO\n");
 				
-				while((n=read(newfd,buffer,512))!=0){
+				memset(buffer, 0, sizeof(buffer));
 
-					printf("BAM: %s\n", buffer);
+				while((n=read(newfd,buffer,512))!=0){
 
 				 	if(n==-1)
 				 		break;//error
 
-				 	ptr=&buffer[0];
+				 	printf("BAM: %s\n", buffer);
 
-				 	
+				 	/*ptr=&buffer[0];
+
+				 	printf("estou bebado %d",n);
 					
 					while(n>0){
 					 	if((nw=write(newfd,ptr,n))<=0){
@@ -356,10 +357,12 @@ int main(int argc, char* argv[]) {
 					 	}
 
 					 	n-=nw; ptr+=nw;
-
-					 }
+					 	printf("x");
+					 }*/
 				}
 		}
+
+		printf("BAZOU\n");
 
 		if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
 			usrRegister(in_snpip, in_snpport,in_name_surname,in_ip,in_scport);
@@ -447,9 +450,11 @@ int main(int argc, char* argv[]) {
 			}
 		}else if(strstr(usrIn,"message") != NULL){
 
-			sscanf(usrIn,"message %s", buffer);
+			sscanf(usrIn,"message %s\n", buffer);
 
 			write(fd_out,buffer,strlen(buffer)); //stdout
+
+			memset(buffer, 0, sizeof(buffer));
 
 		}else if(strcmp(usrIn,"disconnect\n") == 0){
 
