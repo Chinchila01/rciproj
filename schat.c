@@ -17,7 +17,8 @@ typedef int bool;
 
 // Program States
 #define init 0 // Initial State
-#define registered 1 // Initial State
+#define registered 1
+#define onChat 2 
 
 int stateMachine = init;
 
@@ -215,6 +216,11 @@ int main(int argc, char* argv[]) {
 	char buffer[512];
 	char * name2connect;
 
+	int fd, addrlen, newfd;
+	struct sockaddr_in addr;
+	int n, nw;
+	char *ptr;
+
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
 		switch(c)
@@ -291,6 +297,58 @@ int main(int argc, char* argv[]) {
 		if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
 			usrRegister(in_snpip, in_snpport,in_name_surname,in_ip,in_scport);
 
+			if((fd=socket(AF_INET,SOCK_STREAM,0))==-1)exit(1);//error
+			memset((void*)&addr,(int)'\0',sizeof(addr));
+			addr.sin_family=AF_INET;
+			addr.sin_addr.s_addr=htonl(INADDR_ANY);
+			addr.sin_port=htons(7000);
+
+			if(bind(fd,(struct sockaddr*)&addr,sizeof(addr))==-1)
+			 exit(1);//error
+
+			if(listen(fd,5)==-1)exit(1);//error
+
+
+
+			while(1){addrlen=sizeof(addr);
+
+
+			if((newfd=accept(fd,(struct sockaddr*)&addr,&addrlen))==-1)
+				exit(1); //error
+
+			printf("entra no while\n");
+
+			while(1){
+
+				while((n=read(newfd,buffer,512))!=0){
+
+					printf("BAM: %s\n", buffer);
+
+				 	if(n==-1)
+				 		break;//error
+
+				 	ptr=&buffer[0];
+
+				 	
+					
+					while(n>0){
+					 	if((nw=write(newfd,ptr,n))<=0){
+					 		break;//error
+					 	}
+
+					 	n-=nw; ptr+=nw;
+
+					 }
+				}
+			}
+			
+			close(newfd);
+			
+			}
+/* close(fd); exit(0); */
+
+			 printf("YOOOOLLOOOO\n");
+
 		}else if(strcmp(usrIn,"leave\n") == 0){
 			usrExit(in_snpip, in_snpport,in_name_surname);
 
@@ -306,44 +364,43 @@ int main(int argc, char* argv[]) {
 			
 		}else if(strcmp(usrIn,"connect\n") == 0){
 
-			/*
-			int fd, addrlen, newfd;
-			struct sockaddr_in addr;
-			int n, nw;
-			char *ptr, buffer[128];
-
+			if(stateMachine == onChat){
+/*
 			if((fd=socket(AF_INET,SOCK_STREAM,0))==-1)exit(1);//error
 			
-			memset((void*)&addr,(int)'\0',sizeof(addr));
-			addr.sin_family=AF_INET;
-			addr.sin_addr.s_addr=htonl(INADDR_ANY);
-			addr.sin_port=htons(9000);
-			
-			if(bind(fd,(struct sockaddr*)&addr,sizeof(addr))==-1)
-				exit(1);//error
-			
-			if(listen(fd,5)==-1)exit(1);//error
-			
-			while(1){addrlen=sizeof(addr);
-			
-			if((newfd=accept(fd,(struct sockaddr*)&addr,&addrlen))==-1)
-				exit(1);//error
-			
-			while((n=read(newfd,buffer,128))!=0){if(n==-1)exit(1);//error
-				ptr=&buffer[0];
-			
-			while(n>0){if((nw=write(newfd,ptr,n))<=0)exit(1);//error
-				n-=nw; ptr+=nw;}
+				memset((void*)&addr,(int)'\0',sizeof(addr));
+				addr.sin_family=AF_INET;
+				addr.sin_addr.s_addr=htonl(INADDR_ANY);
+				addr.sin_port=htons(atoi(in_snpport));
+				
+				if(bind(fd,(struct sockaddr*)&addr,sizeof(addr))==-1)
+					exit(1);//error
+				
+				if(listen(fd,5)==-1)exit(1);//error
+				
+				while(1){addrlen=sizeof(addr);
+				
+				if((newfd=accept(fd,(struct sockaddr*)&addr,&addrlen))==-1)
+					exit(1);//error
+				
+				while((n=read(newfd,buffer,128))!=0){if(n==-1)exit(1);//error
+					ptr=&buffer[0];
+				
+				while(n>0){if((nw=write(newfd,ptr,n))<=0)exit(1);//error
+					n-=nw; ptr+=nw;}
+				}
+					close(newfd);
+				}*/
 			}
-				close(newfd);
-			}*/
-
 		}else if(strcmp(usrIn,"message\n") == 0){
 
 		}else if(strcmp(usrIn,"disconnect\n") == 0){
 
 		}else if(strcmp(usrIn,"exit\n") == 0){
-			// close connections
+
+			// checkar se nao fizemos leave antes !!!!!!!!!!!!! - maquina de estados
+			usrExit(in_snpip, in_snpport,in_name_surname);
+
 			printf("Exiting..\n");
 			break;
 		}else{
