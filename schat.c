@@ -36,7 +36,7 @@ int surDir_sock;
  *  returns:  -1 always (when this runs, it means something about the user's entered arguments went wrong)
  */
 int show_usage(){
-	printf("Usage: schat –n name.surname [–i ip] [-p scport] -s snpip -q snpport\n");
+	printf("Usage: schat –n name.surname –i ip -p scport -s snpip -q snpport\n");
 	return -1;
 
 }
@@ -271,37 +271,10 @@ int main(int argc, char* argv[]) {
 		}
 	}
 	/* Check if required arguments are given   */
-	if(in_name_surname == NULL || in_snpip == NULL || in_snpport == NULL) {
+	if(in_name_surname == NULL || in_snpip == NULL || in_snpport == NULL || in_scport == NULL || in_ip == NULL) {
 		show_usage();
 		return -1;
 	}
-
-	if(in_ip == NULL) {
-		/* Open the command for reading. */
-		fp_ip = popen("ip a | grep wlan", "r");
-		if (fp_ip == NULL) {
-			printf("Cannot get local ip address.\n" );
-			return(-1);
-		}
-
-		/* Read the output a line at a time - output it. */
-		while (fgets(ip_path, sizeof(ip_path)-1, fp_ip) != NULL) {
-			lineCount--;
-			if (lineCount == 0){
-				sscanf(ip_path,"%s %[^'/']%s",garb_0,ip, garb_0);
-			}
-		}
-
-		pclose(fp_ip);
-
-		in_ip = ip;
-	}
-
-	if(in_scport == NULL) {
-		in_scport = "6000";
-	}
-
-
 
 	printf("Connection Data:\nLocalhost:%s:%s\nSurname Server:%s:%s\n",in_ip,in_scport,in_snpip,in_snpport);
 
@@ -311,7 +284,7 @@ int main(int argc, char* argv[]) {
 	memset((void*)&addr,(int)'\0',sizeof(addr));
 	addr.sin_family=AF_INET;
 	addr.sin_addr.s_addr=htonl(INADDR_ANY);
-	addr.sin_port=htons(7000);
+	addr.sin_port=htons(atoi(in_scport));
 
 	if(bind(fd,(struct sockaddr*)&addr,sizeof(addr))==-1){
 		printf("ERROR: Cannot bind.\n");
@@ -425,7 +398,7 @@ int main(int argc, char* argv[]) {
 
 			addr_out.sin_family=AF_INET;
 			addr_out.sin_addr=*a;
-			addr_out.sin_port=htons(7000);
+			addr_out.sin_port=htons(atoi(in_scport));
 
 			n=connect(fd_out,(struct sockaddr*)&addr_out,sizeof(addr_out));
 
