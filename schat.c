@@ -296,19 +296,23 @@ int main(int argc, char* argv[]) {
 		exit(1);//error
 	}
 
+	printf("Let's start..\n");
+
 	while(1){
 
 		FD_ZERO(&rfds);
 		FD_SET(fileno(stdin),&rfds);
 		FD_SET(fd,&rfds);
-		FD_SET(newfd,&rfds);
-			
+		
 		maxfd = fileno(stdin);
-		maxfd = max(maxfd,fileno(stdin));
-		maxfd = max(maxfd,fileno(stdin));
+		maxfd = max(maxfd,fd);
 
 		counter=select(maxfd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,(struct timeval *)NULL);
- 		if(counter<=0) exit(1);
+ 		
+ 		if(counter < 0){
+ 			printf("ERROR: %s\n",strerror(errno));
+ 			exit(1);
+ 		}
 
  		if(FD_ISSET(fileno(stdin),&rfds)){
 			printf("YOO\n");
@@ -326,13 +330,15 @@ int main(int argc, char* argv[]) {
 				printf("ERROR: Cannot start listening TCP.\n");
 				exit(1); //error
 			}
+
+			FD_SET(newfd,&rfds);
+			maxfd = max(maxfd,newfd);
+
 		}
 
 		if(FD_ISSET(newfd,&rfds)){
 			printf("YOO ACCEPT YOO\n");
-
-
-				/*
+				
 				while((n=read(newfd,buffer,512))!=0){
 
 					printf("BAM: %s\n", buffer);
@@ -352,7 +358,7 @@ int main(int argc, char* argv[]) {
 					 	n-=nw; ptr+=nw;
 
 					 }
-				}*/
+				}
 		}
 
 		if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
@@ -383,6 +389,8 @@ int main(int argc, char* argv[]) {
 			
 		}else if(strcmp(usrIn,"connect\n") == 0){
 
+			printf("Trying to connect..\n");
+
 			fd_out=socket(AF_INET,SOCK_STREAM,0);//TCP socket
 
 			if(fd_out==-1){
@@ -398,11 +406,16 @@ int main(int argc, char* argv[]) {
 
 			addr_out.sin_family=AF_INET;
 			addr_out.sin_addr=*a;
-			addr_out.sin_port=htons(atoi(in_scport));
+			addr_out.sin_port=htons(7000);
 
 			n=connect(fd_out,(struct sockaddr*)&addr_out,sizeof(addr_out));
 
-			printf("LIGOU\n");
+			if (n == -1){
+				printf("ERROR connecting\n");
+				return -1;
+			}
+
+			printf("SO QUE NAO\n");
 
 			if(stateMachine == onChat){
 /*
