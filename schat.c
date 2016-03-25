@@ -65,6 +65,8 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	addr.sin_addr=*a;
 	addr.sin_port=htons(atoi(dst_port));
 
+	printf("UDP Sending: %s\n", msg);
+
 	n=sendto(surDir_sock,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
 	if(n==-1) {
 		printf("UDP error: sending message to the server\n");
@@ -73,12 +75,8 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 		return NULL;
 	}
 
-	printf("YEAAAAAAAAAAAAAAAH SENT\n");
-
 	addrlen = sizeof(addr);
 	n=recvfrom(surDir_sock,buffer,512,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
-
-	printf("YEAAAAAAAAAAAAAAAH RECEIVED\n");	
 
 	if(n==-1) {
 		printf("UDP error: receiving message to the server\n");
@@ -103,7 +101,7 @@ bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char
 	char buffer[512];
 	char * answer;
 
-	sprintf(buffer,"REG %s;%s;%s\n",full_name,my_ip,my_port);
+	sprintf(buffer,"REG %s;%s;%s",full_name,my_ip,my_port);
 
 	msg = malloc(strlen(buffer));
 	msg = buffer;
@@ -132,9 +130,10 @@ bool usrExit(char * snpip, char * port, char * full_name){
 	char *answer;
 	char * msg;
 
-	sprintf(buffer,"UNR %s\n",full_name);
+	sprintf(buffer,"UNR %s",full_name);
 
 	msg = malloc(strlen(buffer));
+	msg = buffer;
 
 	answer = comUDP(msg, snpip, port);
 
@@ -159,7 +158,7 @@ bool queryUser(char * snpip, char * port, char * user){
 	char *answer;
 	char * msg;
 
-	sprintf(buffer,"QRY %s\n",user);
+	sprintf(buffer,"QRY %s",user);
 
 	msg = malloc(strlen(buffer));
 	msg = buffer;
