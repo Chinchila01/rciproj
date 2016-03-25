@@ -367,14 +367,8 @@ int main(int argc, char* argv[]) {
 		printf("BAZOU\n");
 
 		if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
+
 			usrRegister(in_snpip, in_snpport,in_name_surname,in_ip,in_scport);
-
-			
-			
-
-
-			
-
 
 			/* close(fd); exit(0); */
 
@@ -398,11 +392,29 @@ int main(int argc, char* argv[]) {
 				printf("User located at: %s\n", location);
 			}
 
-		}else if(strcmp(usrIn,"connect\n") == 0){
+		}else if(strstr(usrIn,"connect") != NULL){
 
-			printf("Trying to connect..\n");
+			printf("Trying to locate user..\n");
 
-			fd_out=socket(AF_INET,SOCK_STREAM,0);//TCP socket
+			sscanf(usrIn,"connect %s", buffer);
+
+			name2connect = malloc(strlen(buffer));
+			name2connect = buffer;
+
+			location = queryUser(in_snpip, in_snpport, name2connect);
+
+			if (location == NULL){
+				printf("Ups.. User not found.\n");
+			}else{
+				printf("User located at: %s\n", location);
+				
+				printf("Trying to connect..\n");
+
+				
+			}
+
+
+			/*fd_out=socket(AF_INET,SOCK_STREAM,0);//TCP socket
 
 			if(fd_out==-1){
 				printf("FAIL\n");
@@ -427,7 +439,7 @@ int main(int argc, char* argv[]) {
 			}
 
 			printf("SO QUE NAO\n");
-
+*/
 			if(stateMachine == onChat){
 /*
 			if((fd=socket(AF_INET,SOCK_STREAM,0))==-1)exit(1);//error
