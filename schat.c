@@ -153,38 +153,40 @@ bool usrExit(char * snpip, char * port, char * full_name){
 	return true;
 }
 
-bool queryUser(char * snpip, char * port, char * user){
-	char buffer[512];
+char * queryUser(char * snpip, char * port, char * user){
+	char buffer[512], garb_0[512];
 	char *answer;
 	char * msg;
+	char * location;
+	int remote_port;
 
 	sprintf(buffer,"QRY %s",user);
 
 	msg = malloc(strlen(buffer));
 	msg = buffer;
 
-	printf("\n%s\n\n", msg);
-
 	answer = comUDP(msg, snpip, port);
-
-	printf("answer:\n");
-
-	printf("%s\n", answer);
 
 	if (answer == NULL){
 		printf("UDP error: empty message received\n");
 		close(surDir_sock);
-		return false;
+		return NULL;
 	}
 
-	if(strcmp(answer,"OK") != 0) {
+	if(strstr(answer,"NOK") != NULL) {
 		printf("Error: %s\n",answer);
-		return false;
+		return NULL;
 	}
 
-	printf("User unregistered successful!\n");
+	memset(buffer, 0, sizeof(buffer));
 
-	return true;
+	remote_port = sscanf(answer,"RPL %[^';'];%s", garb_0, buffer);
+
+	location = malloc(strlen(buffer));
+
+	location = buffer;
+
+	return location;
 }
 
 /*
@@ -217,6 +219,7 @@ int main(int argc, char* argv[]) {
 	char c;
 	char buffer[512];
 	char * name2connect;
+	char * location;
 
 	int fd, addrlen, newfd;
 	struct sockaddr_in addr;
@@ -333,7 +336,7 @@ int main(int argc, char* argv[]) {
 			maxfd = max(maxfd,newfd);
 
 		}
-
+/*
 		if(FD_ISSET(newfd,&rfds)){
 			printf("YOO ACCEPT YOO\n");
 				
@@ -357,9 +360,9 @@ int main(int argc, char* argv[]) {
 
 					 	n-=nw; ptr+=nw;
 					 	printf("x");
-					 }*/
+					 }*//*
 				}
-		}
+		}*/
 
 		printf("BAZOU\n");
 
@@ -387,8 +390,14 @@ int main(int argc, char* argv[]) {
 
 			name2connect = buffer;
 
-			queryUser(in_snpip, in_snpport, name2connect);
-			
+			location = queryUser(in_snpip, in_snpport, name2connect);
+
+			if (location == NULL){
+				printf("Ups.. User not found.\n");
+			}else{
+				printf("User located at: %s\n", location);
+			}
+
 		}else if(strcmp(usrIn,"connect\n") == 0){
 
 			printf("Trying to connect..\n");
@@ -462,6 +471,8 @@ int main(int argc, char* argv[]) {
 			// checkar se nao fizemos leave antes !!!!!!!!!!!!! - maquina de estados
 			usrExit(in_snpip, in_snpport,in_name_surname);
 			close(newfd);
+			close(fd);
+			close(fd_out);
 
 			printf("Exiting..\n");
 			break;
