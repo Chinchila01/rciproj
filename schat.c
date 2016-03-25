@@ -52,7 +52,7 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 
 	/* Open UDP socket for our server */
 	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
-		printf("Error: %s\n",strerror(errno));
+		printf("UDP error: %s\n",strerror(errno));
 		return NULL;
 	}	
 	
@@ -88,7 +88,7 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	answer=malloc(n);
 	sprintf(answer,"%.*s",n,buffer);
 
-	printf("RAW ANSWER: %s\n",answer);
+	printf("Raw answer: %s\n",answer);
 
 	close(surDir_sock);
 
@@ -158,7 +158,6 @@ char * queryUser(char * snpip, char * port, char * user){
 	char *answer;
 	char * msg;
 	char * location;
-	int remote_port;
 
 	sprintf(buffer,"QRY %s",user);
 
@@ -180,7 +179,7 @@ char * queryUser(char * snpip, char * port, char * user){
 
 	memset(buffer, 0, sizeof(buffer));
 
-	remote_port = sscanf(answer,"RPL %[^';'];%s", garb_0, buffer);
+	sscanf(answer,"RPL %[^';'];%s", garb_0, buffer);
 
 	location = malloc(strlen(buffer));
 
@@ -235,6 +234,9 @@ int main(int argc, char* argv[]) {
 
 	fd_set rfds;
 	int maxfd, counter;
+
+	char remote_port [24];
+	char remote_ip [24];
 
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
@@ -311,7 +313,7 @@ int main(int argc, char* argv[]) {
 		counter=select(maxfd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,(struct timeval *)NULL);
  		
  		if(counter == -1){
- 			printf("ERROR: %s\n",strerror(errno));
+ 			printf("ERROR-: %s\n",strerror(errno));
  			exit(1);
  		}
 
@@ -319,8 +321,6 @@ int main(int argc, char* argv[]) {
 			printf("YOO\n");
 			fgets(usrIn,100,stdin);
 		}
-
-
 
 		if(FD_ISSET(fd,&rfds)){
 			printf("FDDDD ????\n");
@@ -334,25 +334,27 @@ int main(int argc, char* argv[]) {
 
 			FD_SET(newfd,&rfds);
 			maxfd = max(maxfd,newfd);
+			
 
 		}
-/*
-		if(FD_ISSET(newfd,&rfds)){
-			printf("YOO ACCEPT YOO\n");
-				
+
+		if (newfd != NULL){
+
+			if(FD_ISSET(newfd,&rfds)){
+				printf("YOO ACCEPT YOO\n");
+					
 				memset(buffer, 0, sizeof(buffer));
 
 				while((n=read(newfd,buffer,512))!=0){
 
 				 	if(n==-1)
 				 		break;//error
-
-				 	printf("BAM: %s\n", buffer);
+					printf("BAM: %s\n", buffer);
 
 				 	/*ptr=&buffer[0];
 
 				 	printf("estou bebado %d",n);
-					
+						
 					while(n>0){
 					 	if((nw=write(newfd,ptr,n))<=0){
 					 		break;//error
@@ -360,16 +362,21 @@ int main(int argc, char* argv[]) {
 
 					 	n-=nw; ptr+=nw;
 					 	printf("x");
-					 }*//*
+					}*/
 				}
-		}*/
+			}
+		}
+
+		if (fd_out != NULL){
+			if(FD_ISSET(fd_out,&rfds)){
+
+			}
+		}
 
 		printf("BAZOU\n");
 
 		if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
-
 			usrRegister(in_snpip, in_snpport,in_name_surname,in_ip,in_scport);
-
 			/* close(fd); exit(0); */
 
 		}else if(strcmp(usrIn,"leave\n") == 0){
@@ -378,50 +385,63 @@ int main(int argc, char* argv[]) {
 
 		}else if(strstr(usrIn,"find") != NULL){
 
+			memset(buffer, 0, sizeof(buffer));
+
 			sscanf(usrIn,"find %s", buffer);
 
 			name2connect = malloc(strlen(buffer));
 
 			name2connect = buffer;
 
-			location = queryUser(in_snpip, in_snpport, name2connect);
-
-			if (location == NULL){
-				printf("Ups.. User not found.\n");
+			if (strlen(name2connect) <= 1){
+				printf("Argument missing. Who do you want to talk to?\n");
 			}else{
-				printf("User located at: %s\n", location);
+				location = queryUser(in_snpip, in_snpport, name2connect);
+
+				if (location == NULL){
+					printf("Ups.. User not found.\n");
+				}else{
+					printf("User located at: %s\n", location);
+				}
 			}
 
 		}else if(strstr(usrIn,"connect") != NULL){
 
 			printf("Trying to locate user..\n");
 
+			memset(buffer, 0, sizeof(buffer));
+
 			sscanf(usrIn,"connect %s", buffer);
 
 			name2connect = malloc(strlen(buffer));
 			name2connect = buffer;
 
-			location = queryUser(in_snpip, in_snpport, name2connect);
-
-			if (location == NULL){
-				printf("Ups.. User not found.\n");
+			if (strlen(name2connect) <= 1){
+				printf("Argument missing. Who do you want to talk to?\n");
 			}else{
-				printf("User located at: %s\n", location);
-				
-				printf("Trying to connect..\n");
+				location = queryUser(in_snpip, in_snpport, name2connect);
 
-				
+				if (location == NULL){
+					printf("Ups.. User not found.\n");
+				}else{
+					printf("User located at: %s\n", location);
+					
+					printf("Trying to connect..\n");
+				}	
 			}
 
+			strcpy(buffer,location);
 
-			/*fd_out=socket(AF_INET,SOCK_STREAM,0);//TCP socket
+			sscanf(buffer,"%[^';'];%s",remote_ip, remote_port);
+
+			fd_out=socket(AF_INET,SOCK_STREAM,0);//TCP socket
 
 			if(fd_out==-1){
 				printf("FAIL\n");
 				return -1;//error
 			}
 
-			inet_pton(AF_INET, dst_ip, &temp);
+			inet_pton(AF_INET, remote_ip, &temp);
 			h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
 			a=(struct in_addr*)h->h_addr_list[0];
 
@@ -429,7 +449,7 @@ int main(int argc, char* argv[]) {
 
 			addr_out.sin_family=AF_INET;
 			addr_out.sin_addr=*a;
-			addr_out.sin_port=htons(7000);
+			addr_out.sin_port=htons(atoi(remote_port));
 
 			n=connect(fd_out,(struct sockaddr*)&addr_out,sizeof(addr_out));
 
@@ -438,8 +458,6 @@ int main(int argc, char* argv[]) {
 				return -1;
 			}
 
-			printf("SO QUE NAO\n");
-*/
 			if(stateMachine == onChat){
 /*
 			if((fd=socket(AF_INET,SOCK_STREAM,0))==-1)exit(1);//error
