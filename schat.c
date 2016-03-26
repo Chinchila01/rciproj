@@ -318,8 +318,6 @@ int main(int argc, char* argv[]) {
  		memset(usrIn, 0, sizeof(usrIn));
 
 		counter=select(maxfd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,(struct timeval *)NULL);
- 		
-		printf("LHE DESBLOQUEIA\n");
 
  		if(counter == -1){
  			printf("ERROR-: %s\n",strerror(errno));
@@ -328,7 +326,6 @@ int main(int argc, char* argv[]) {
 
 
  		if(FD_ISSET(fileno(stdin),&rfds)){
-			printf("YOO\n");
 			fgets(usrIn,100,stdin);
 
 			if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
@@ -337,7 +334,13 @@ int main(int argc, char* argv[]) {
 
 			}else if(strcmp(usrIn,"leave\n") == 0){
 				usrExit(in_snpip, in_snpport,in_name_surname);
+				
 				close(newfd);
+				close(fd);
+				close(fd_out);
+				newfd = NULL;
+				fd = NULL;
+				fd_out = NULL;
 
 			}else if(strstr(usrIn,"find") != NULL){
 
@@ -347,7 +350,7 @@ int main(int argc, char* argv[]) {
 
 				name2connect = malloc(strlen(buffer));
 
-				name2connect = buffer;
+				strcpy(name2connect,buffer);
 
 				if (strlen(name2connect) <= 1){
 					printf("Argument missing. Who do you want to talk to?\n");
@@ -370,7 +373,7 @@ int main(int argc, char* argv[]) {
 				sscanf(usrIn,"connect %s", buffer);
 
 				name2connect = malloc(strlen(buffer));
-				name2connect = buffer;
+				strcpy(name2connect,buffer);
 
 				if (strlen(name2connect) <= 1){
 					printf("Argument missing. Who do you want to talk to?\n");
@@ -415,37 +418,14 @@ int main(int argc, char* argv[]) {
 				}
 
 				stateMachine = onChat_sent;
-	/*
-				if((fd=socket(AF_INET,SOCK_STREAM,0))==-1)exit(1);//error
-				
-					memset((void*)&addr,(int)'\0',sizeof(addr));
-					addr.sin_family=AF_INET;
-					addr.sin_addr.s_addr=htonl(INADDR_ANY);
-					addr.sin_port=htons(atoi(in_snpport));
-					
-					if(bind(fd,(struct sockaddr*)&addr,sizeof(addr))==-1)
-						exit(1);//error
-					
-					if(listen(fd,5)==-1)exit(1);//error
-					
-					while(1){addrlen=sizeof(addr);
-					
-					if((newfd=accept(fd,(struct sockaddr*)&addr,&addrlen))==-1)
-						exit(1);//error
-					
-					while((n=read(newfd,buffer,128))!=0){if(n==-1)exit(1);//error
-						ptr=&buffer[0];
-					
-					while(n>0){if((nw=write(newfd,ptr,n))<=0)exit(1);//error
-						n-=nw; ptr+=nw;}
-					}
-						close(newfd);
-					}*/
+
 			}else if(strstr(usrIn,"message") != NULL){
+
+				memset(buffer, 0, sizeof(buffer));
 
 				sscanf(usrIn,"message %[^\n]", buffer);
 
-				printf("Sending message: %s\n",buffer);
+				printf("You: %s\n",buffer);
 
 				if (stateMachine == onChat_sent){
 
@@ -461,16 +441,19 @@ int main(int argc, char* argv[]) {
 					printf("Could not send message.\n");
 				}
 
-				/*
-				if (stateMachine == onChat_sent){
-					
-				}else if(stateMachine == onChat_received){
-					write(newfd,buffer,strlen(buffer));
-				}*/
-
 				memset(buffer, 0, sizeof(buffer));
 
 			}else if(strcmp(usrIn,"disconnect\n") == 0){
+
+				if (stateMachine == onChat_sent){
+
+					close(fd_out);
+
+				}else if(stateMachine == onChat_received){
+					
+					close(newfd);
+
+				}
 
 			}else if(strcmp(usrIn,"exit\n") == 0){
 
@@ -479,6 +462,9 @@ int main(int argc, char* argv[]) {
 				close(newfd);
 				close(fd);
 				close(fd_out);
+				newfd = NULL;
+				fd = NULL;
+				fd_out = NULL;
 
 				printf("Exiting..\n");
 				break;
@@ -488,7 +474,6 @@ int main(int argc, char* argv[]) {
 		}
 
 		if(FD_ISSET(fd,&rfds)){
-			printf("FDDDD ????\n");
 
 			addrlen=sizeof(addr);
 
@@ -503,49 +488,42 @@ int main(int argc, char* argv[]) {
 			stateMachine = onChat_received;
 
 			if(FD_ISSET(newfd,&rfds)){
-				printf("YOO ACCEPT YOO\n");
 					
 				memset(buffer, 0, sizeof(buffer));
 
 				n=read(newfd,buffer,512);
 
-				if(n==-1)
-				 	break;//error
-
-				printf("BAM: %s\n", buffer);
-
-				 	/*ptr=&buffer[0];
-
-				 	printf("estou bebado %d",n);
-						
-					while(n>0){
-					 	if((nw=write(newfd,ptr,n))<=0){
-					 		break;//error
-					 	}
-
-					 	n-=nw; ptr+=nw;
-					 	printf("x");
-					}*/
+				if(n == -1){
+					printf("ERROR: Cannot read message\n");
+				}else if(n == 0){
+					printf("Connection closed by your friend.\n");
+				 	close(newfd);
+				 	newfd = NULL;
+				}else{
+					printf("your friend: %s\n", buffer);
+				}
 			}
 		}
 
 		if (fd_out != NULL){
 			if(FD_ISSET(fd_out,&rfds)){
-				printf("Don't worry mate\n");
 
 				memset(buffer, 0, sizeof(buffer));
 
 				n=read(fd_out,buffer,512);
 
-				if(n==-1)
-				 	break;//error
 
-				printf("AI NAO: %s\n", buffer);
+				if(n == -1){
+					printf("ERROR: Cannot read message\n");
+				}else if(n == 0){
+					printf("Connection closed by your friend.\n");
+				 	close(fd_out);
+				 	fd_out = NULL;
+				}else{
+					printf("%s: %s\n", name2connect, buffer);
+				}				
 			}
 		}
-
-		printf("BAZOU\n");
-
 		
 	}
 
