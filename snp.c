@@ -294,7 +294,7 @@ char* reg_user(char* buffer, int n) {
 	while(fgets(temp,512,ufile) != NULL) {
 		printf("lel\n");
 		if(strstr(temp,"#") != NULL) continue;
-		if((strstr(temp, name)) != NULL) {
+		if((strcmp(temp, name)) == 0) {
 			printf(ANSI_COLOR_RED "User name not unique :(\n" ANSI_COLOR_RESET);
 			fclose(ufile);
 			return "NOK - Username not unique";
@@ -325,6 +325,7 @@ char* reg_user(char* buffer, int n) {
 char* unreg_user(char *buffer, int n){
 	FILE *ufile;
 	char name[128],surname[128],temp[512];
+	char tempname[128],tempip[128],tempport[128];
 	int line;
 	buffer[n] = '\0';
 	if(sscanf(buffer,"UNR %[^'.'].%s",name,surname) != 2){
@@ -343,8 +344,12 @@ char* unreg_user(char *buffer, int n){
 		return "NOK - Client List not accessible";
 	}
 	while(fgets(temp,512,ufile) != NULL) {
+		if(sscanf(temp,"%[^';'];%[^';'];%s",tempname,tempip,tempport) != 3) {
+			printf(ANSI_COLOR_RED "unreg_user: Error parsing file contents\n" ANSI_COLOR_RESET);
+			return "NOK - Error with local file";
+		}
 		if(strstr(temp,"#") != NULL) continue;
-		if((strstr(temp, name)) != NULL) {
+		if((strcmp(tempname, name)) == 0) {
 			line = ftell(ufile);
 			fseek(ufile,line-(int)strlen(temp),SEEK_SET);
 			if(fprintf(ufile,"#") < 0) {
