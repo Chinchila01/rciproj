@@ -303,13 +303,12 @@ int main(int argc, char* argv[]) {
 	printf("Let's start..\n");
 
 	while(1){
-
 		FD_ZERO(&rfds);
 		FD_SET(fileno(stdin),&rfds);
 		FD_SET(fd,&rfds);
 		FD_SET(newfd,&rfds);
 		FD_SET(fd_out,&rfds);
-			
+		
 		maxfd = fileno(stdin);
 		maxfd = max(maxfd,fd);
 		maxfd = max(maxfd,newfd);
@@ -335,12 +334,10 @@ int main(int argc, char* argv[]) {
 			}else if(strcmp(usrIn,"leave\n") == 0){
 				usrExit(in_snpip, in_snpport,in_name_surname);
 				
-				close(newfd);
-				close(fd);
-				close(fd_out);
-				newfd = NULL;
-				fd = NULL;
-				fd_out = NULL;
+				shutdown(fd_out, SHUT_RDWR);
+				shutdown(newfd, SHUT_RDWR);
+
+				stateMachine = init;
 
 			}else if(strstr(usrIn,"find") != NULL){
 
@@ -364,7 +361,7 @@ int main(int argc, char* argv[]) {
 					}
 				}
 
-			}else if(strstr(usrIn,"connect") != NULL){
+			}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0){
 
 				printf("Trying to locate user..\n");
 
@@ -447,11 +444,11 @@ int main(int argc, char* argv[]) {
 
 				if (stateMachine == onChat_sent){
 
-					close(fd_out);
+					shutdown(fd_out, SHUT_RDWR);
 
 				}else if(stateMachine == onChat_received){
 					
-					close(newfd);
+					shutdown(newfd, SHUT_RDWR);
 
 				}
 
