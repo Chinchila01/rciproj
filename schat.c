@@ -340,9 +340,11 @@ int main(int argc, char* argv[]) {
 
 			if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
 				usrRegister(in_snpip, in_snpport,in_name_surname,in_ip,in_scport);
+
+				stateMachine = registered;
 				/* close(fd); exit(0); */
 
-			}else if(strcmp(usrIn,"leave\n") == 0){
+			}else if(strcmp(usrIn,"leave\n") == 0 && stateMachine != init){
 				usrExit(in_snpip, in_snpport,in_name_surname);
 				
 				shutdown(fd_out, SHUT_RDWR);
@@ -350,7 +352,7 @@ int main(int argc, char* argv[]) {
 
 				stateMachine = init;
 
-			}else if(strstr(usrIn,"find") != NULL){
+			}else if(strstr(usrIn,"find") != NULL && stateMachine != init){
 
 				memset(buffer, 0, sizeof(buffer));
 
@@ -372,7 +374,7 @@ int main(int argc, char* argv[]) {
 					}
 				}
 
-			}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0){
+			}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0 && stateMachine != init){
 
 				memset(buffer, 0, sizeof(buffer));
 
@@ -395,44 +397,44 @@ int main(int argc, char* argv[]) {
 							printf("User located at: %s\n", location);
 							
 							printf("Trying to connect..\n");
+
+							strcpy(buffer,location);
+
+							sscanf(buffer,"%[^';'];%s",remote_ip, remote_port);
+
+							fd_out=socket(AF_INET,SOCK_STREAM,0);//TCP socket
+
+							if(fd_out==-1){
+								printf("FAIL\n");
+								return -1;//error
+							}
+
+							inet_pton(AF_INET, remote_ip, &temp);
+							h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
+							a=(struct in_addr*)h->h_addr_list[0];
+
+							memset((void*)&addr_out,(int)'\0',sizeof(addr_out));
+
+							addr_out.sin_family=AF_INET;
+							addr_out.sin_addr=*a;
+							addr_out.sin_port=htons(atoi(remote_port));
+
+							n=connect(fd_out,(struct sockaddr*)&addr_out,sizeof(addr_out));
+
+							if (n == -1){
+								printf("ERROR connecting\n");
+								return -1;
+							}
+
+							printf(ANSI_COLOR_GREEN "\nConnected with %s !!\n" ANSI_COLOR_RESET, name2connect);
+							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
+
+							stateMachine = onChat_sent;
 						}	
-					}
-
-					strcpy(buffer,location);
-
-					sscanf(buffer,"%[^';'];%s",remote_ip, remote_port);
-
-					fd_out=socket(AF_INET,SOCK_STREAM,0);//TCP socket
-
-					if(fd_out==-1){
-						printf("FAIL\n");
-						return -1;//error
-					}
-
-					inet_pton(AF_INET, remote_ip, &temp);
-					h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
-					a=(struct in_addr*)h->h_addr_list[0];
-
-					memset((void*)&addr_out,(int)'\0',sizeof(addr_out));
-
-					addr_out.sin_family=AF_INET;
-					addr_out.sin_addr=*a;
-					addr_out.sin_port=htons(atoi(remote_port));
-
-					n=connect(fd_out,(struct sockaddr*)&addr_out,sizeof(addr_out));
-
-					if (n == -1){
-						printf("ERROR connecting\n");
-						return -1;
-					}
-
-					printf(ANSI_COLOR_GREEN "\nConnected with %s !!\n" ANSI_COLOR_RESET, name2connect);
-					printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
-
-					stateMachine = onChat_sent;
+					}				
 				}
 
-			}else if(strstr(usrIn,"message") != NULL){
+			}else if(strstr(usrIn,"message") != NULL && (stateMachine == onChat_sent || stateMachine == onChat_received) && stateMachine != init){
 
 				memset(buffer, 0, sizeof(buffer));
 
@@ -456,7 +458,7 @@ int main(int argc, char* argv[]) {
 
 				memset(buffer, 0, sizeof(buffer));
 
-			}else if(strcmp(usrIn,"disconnect\n") == 0){
+			}else if(strcmp(usrIn,"disconnect\n") == 0 && (stateMachine == onChat_sent || stateMachine == onChat_received) && stateMachine != init){
 
 				if (stateMachine == onChat_sent){
 
@@ -467,6 +469,8 @@ int main(int argc, char* argv[]) {
 					shutdown(newfd, SHUT_RDWR);
 
 				}
+
+				stateMachine = registered;
 
 			}else if(strcmp(usrIn,"exit\n") == 0){
 
@@ -488,7 +492,35 @@ int main(int argc, char* argv[]) {
 				printf("Exiting..\n");
 				break;
 			}else{
-				printf("You are not allowed to do that my friend.\n");
+				if (strcmp(usrIn,"join\n") == 0){
+					printf("You already joined the network.\n");
+
+				}else if(strcmp(usrIn,"leave\n") == 0){
+					printf("You have to be part of the network to leave it.\nPlease join, you are welcome.\n");
+
+				}else if(strstr(usrIn,"find") != NULL){
+					printf("You have to be part of the network to find someone.\nPlease join, you are welcome.\n");
+				
+				}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0){
+					printf("You have to be part of the network to connect with someone.\nPlease join, you are welcome.\n");
+
+				}else if(strstr(usrIn,"message") != NULL){
+					if (stateMachine != onChat_sent && stateMachine != onChat_received  && stateMachine != init){
+						printf("Ups.. you have to connect with someone before messaging him.\n");
+
+					}else if(stateMachine == init){
+						printf("You have to be part of the network to message someone.\nPlease join, you are welcome.\n");
+					}
+				}else if(strcmp(usrIn,"disconnect\n") == 0){
+					if (stateMachine != onChat_sent && stateMachine != onChat_received && stateMachine != init){
+						printf("You have to be messaging with someone to end the conversation.\n");
+
+					}else if(stateMachine == init){
+						printf("You have to be part of the network and messaging with someone to end the conversation.\nPlease join, you are welcome.\n");
+					}
+				}else{
+					printf("You are not allowed to do that my friend.\n");
+				}
 			}
 		}
 
