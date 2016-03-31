@@ -11,13 +11,94 @@
 #include <string.h>
 #include <errno.h>
 
+#define ANSI_COLOR_BLUE "\x1b[34m"
 #define ANSI_COLOR_RED "\x1b[31m"
 #define ANSI_COLOR_GREEN "\x1b[32m"
+#define ANSI_COLOR_WHITE   "\x1B[37m"
 #define ANSI_COLOR_RESET "\x1b[0m"
 #define SRVFILE "clientlist"
 
+struct command_d{
+	char* cmd_name;
+	char* cmd_help;
+}
+const commands[] = {
+	{"list", "Lists users currently registered with the server"},
+	{"exit", "Exits the program cleanly"},
+	{"help", "Prints a rudimentary help"}
+};
+
+int ncmd = sizeof(commands)/sizeof(commands[0]);
 extern int errno;
 char* servername;
+char* serverfile;
+
+int help() {
+	int i;
+
+	printf(ANSI_COLOR_BLUE "HELP - Here are the commands available:" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_WHITE "\n");
+
+	for(i = 0; i < ncmd; i++) {
+		printf("%s - %s\n",commands[i].cmd_name,commands[i].cmd_help);
+	}
+	return 0;
+}
+
+char * comUDP(char * msg, char * dst_ip, char * dst_port){
+	int surDir_sock;
+	struct sockaddr_in addr;
+	struct in_addr *a;
+	int n, addrlen;
+	struct in_addr temp;
+	struct hostent* h;
+	char buffer[512];
+	char * answer;
+
+	/* Open UDP socket for our server */
+	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
+		printf("UDP error: %s\n",strerror(errno));
+		return NULL;
+	}	
+	
+	inet_pton(AF_INET, dst_ip, &temp);
+	h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
+	a=(struct in_addr*)h->h_addr_list[0];
+
+	memset((void*)&addr,(int)'\0',sizeof(addr));
+	addr.sin_family=AF_INET;
+	addr.sin_addr=*a;
+	addr.sin_port=htons(atoi(dst_port));
+
+	printf("UDP Sending: %s\n", msg);
+
+	n=sendto(surDir_sock,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
+	if(n==-1) {
+		printf("UDP error: sending message to the server\n");
+		free(msg);
+		close(surDir_sock);
+		return NULL;
+	}
+
+	addrlen = sizeof(addr);
+	n=recvfrom(surDir_sock,buffer,512,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
+
+	if(n==-1) {
+		printf("UDP error: receiving message to the server\n");
+		free(msg);
+		close(surDir_sock);
+		return NULL;
+	}
+
+	answer=malloc(n);
+	sprintf(answer,"%.*s",n,buffer);
+
+	printf("Raw answer: %s\n",answer);
+
+	close(surDir_sock);
+
+	return answer;
+}
 
 /* Function: list_users
 *  -------------------
@@ -30,23 +111,26 @@ int list_users() {
 	FILE *ufile;
 	char buffer[512],uname[512],uip[512],uport[512];
 
-	ufile = fopen(SRVFILE,"r");
+	ufile = fopen(serverfile,"r");
 	if(ufile == NULL) {
-		printf(ANSI_COLOR_RED "list_users: error: %s\n" ANSI_COLOR_RESET, strerror(errno));
+		printf(ANSI_COLOR_RED "list_users: error: %s", strerror(errno));
+		printf(ANSI_COLOR_WHITE "\n");
 		return -1;
 	}	
 
 	while(fgets(buffer,512,ufile) != NULL){
 		if(strstr(buffer,"#") == NULL) {	/* If buffer contains # then line is not valid */
 			if(sscanf(buffer,"%[^';'];%[^';'];%s",uname,uip,uport) != 3) {
-				printf(ANSI_COLOR_RED "list_users: error reading user file\n" ANSI_COLOR_RESET);
+				printf(ANSI_COLOR_RED "list_users: error reading user file" ANSI_COLOR_RESET);
+				printf(ANSI_COLOR_WHITE "\n");
 				fclose(ufile);
 				return -1;
 			}
 			printf("%s.%s - %s - %s\n",uname,servername,uip,uport);
 		}
 	}
-	printf(ANSI_COLOR_GREEN "list_users: Done!\n" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_GREEN "list_users: Done!" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_WHITE "\n");
 	fclose(ufile);
 	return 0;
 } 
@@ -60,9 +144,10 @@ int list_users() {
 */
 int reset_file(){
 	FILE *ufile;
-	ufile = fopen(SRVFILE,"w");
+	ufile = fopen(serverfile,"w");
 	if(ufile == NULL) {
-		printf(ANSI_COLOR_RED "reset_file: error: %s\n" ANSI_COLOR_RESET,strerror(errno));
+		printf(ANSI_COLOR_RED "reset_file: error: %s" ANSI_COLOR_RESET,strerror(errno));
+		printf(ANSI_COLOR_WHITE "\n");
 		return -1;
 	}
 	
@@ -98,69 +183,34 @@ int show_usage(){
  *			 -1 if unregister was unsuccessful	
  */
 
-int reg_sa(struct hostent* h, int aport, char* surname, char* localip, char* snpport){
-	int fd,n,addrlen,msglen;
-	struct sockaddr_in addr;
-	struct in_addr *a;
+int reg_sa(char* saip, char* saport, char* surname, char* localip, char* snpport){
+	int msglen;
 	char *msg;
 	char *answer;
-	char buffer[128];
 
 	/* Preparing msg to send */
 	msglen = 7 + strlen(surname) + strlen(localip) + strlen(snpport);
 	msg = malloc(msglen*sizeof(char)+1);
 
 	if(sprintf(msg,"SREG %s;%s;%s",surname,localip,snpport) != (msglen)){
-		printf(ANSI_COLOR_RED "reg_sa: error building string\n" ANSI_COLOR_RESET);
-		free(msg);
-		return -1;
-	}
-	
-	fd=socket(AF_INET,SOCK_DGRAM,0);
-	if(fd==-1) {
-		printf(ANSI_COLOR_RED "reg_sa: error opening socket\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "reg_sa: error building string" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		free(msg);
 		return -1;
 	}
 
-	a=(struct in_addr*)h->h_addr_list[0];
-	memset((void*)&addr,(int)'\0',sizeof(addr));
-	addr.sin_family=AF_INET;
-	addr.sin_addr=*a;
-	addr.sin_port=htons(aport);
-
-	n=sendto(fd,msg,msglen,0,(struct sockaddr*)&addr,sizeof(addr));
-	if(n==-1) {
-		printf(ANSI_COLOR_RED "reg_sa: error sending to surname server\n" ANSI_COLOR_RESET);
-		free(msg);
-		close(fd);
-		return -1;
-	}
-
-	addrlen = sizeof(addr);
-	n=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
-	if(n==-1) {
-		printf(ANSI_COLOR_RED "reg_sa: error receiving from surname server\n" ANSI_COLOR_RESET);
-		free(msg);
-		close(fd);
-		return -1;
-	}
-	
-	answer=malloc(n);
-
-	sprintf(answer,"%.*s",n,buffer);
+	answer = comUDP(msg, saip,saport);
 	if(strcmp(answer,"OK") != 0) {
-		printf(ANSI_COLOR_RED "%s\n" ANSI_COLOR_RESET,answer);
-		free(msg);
+		printf(ANSI_COLOR_RED "%s" ANSI_COLOR_RESET,answer);
+		printf(ANSI_COLOR_WHITE "\n");
 		free(answer);
-		close(fd);
+		free(msg);
 		return -1;
 	}
 
+	printf(ANSI_COLOR_GREEN "reg_sa: Successful!" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_WHITE "\n");
 	free(msg);
-	free(answer);
-	close(fd);
-	printf(ANSI_COLOR_GREEN "reg_sa: Successful!\n" ANSI_COLOR_RESET);
 	return 0;
 }
 
@@ -178,70 +228,35 @@ int reg_sa(struct hostent* h, int aport, char* surname, char* localip, char* snp
  *	TODO: 
  */
 
-int unreg_sa(struct hostent* h, int aport, char* surname){
-	int fd,n,addrlen,msglen;
-	struct sockaddr_in addr;
-	struct in_addr *a;
+int unreg_sa(char* saip, char* saport, char* surname){
+	int msglen;
 	char *msg, *answer;
-	char buffer[128];
 	
-	fd=socket(AF_INET,SOCK_DGRAM,0);
-	if(fd==-1) {
-		printf(ANSI_COLOR_RED "unreg_sa: error opening socket\n" ANSI_COLOR_RESET);
-		return -1;
-	}
-
-	a=(struct in_addr*)h->h_addr_list[0];
-	memset((void*)&addr,(int)'\0',sizeof(addr));
-	addr.sin_family=AF_INET;
-	addr.sin_addr=*a;
-	addr.sin_port=htons(aport);
-
 	/* Preparing Unregister Message */
 	msglen = strlen("SUNR ") + strlen(surname);
 	msg = malloc(msglen*sizeof(char)+1);
 
 	if(sprintf(msg,"SUNR %s",surname) != (msglen)){
-		printf(ANSI_COLOR_RED "unreg_sa: error printing second message\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "unreg_sa: error printing second message" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		free(msg);
-		close(fd);
 		return -1;
 	}	
 
-	/* Sending it to the Surname Server */
-	n=sendto(fd,msg,msglen,0,(struct sockaddr*)&addr,sizeof(addr));
-	if(n==-1) {
-		printf(ANSI_COLOR_RED "unreg_sa: error sending to surname server\n" ANSI_COLOR_RESET);
-		free(msg);
-		close(fd);
-		return -1;
-	}
+	answer = comUDP(msg,saip,saport);
 
-	/* Receiving to check if OK */
-	addrlen = sizeof(addr);
-	n=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
-	if(n==-1) {
-		printf(ANSI_COLOR_RED "unreg_sa: error receiving from surname server\n" ANSI_COLOR_RESET);
-		free(msg);
-		close(fd);
-		return -1;
-	}
-
-	answer = malloc(n);
-
-	sprintf(answer,"%.*s",n,buffer);
 	if(strcmp(answer,"OK") != 0){
-		printf(ANSI_COLOR_RED "%s\n" ANSI_COLOR_RESET,answer);
+		printf(ANSI_COLOR_RED "%s" ANSI_COLOR_RESET,answer);
+		printf(ANSI_COLOR_WHITE "\n");
 		free(msg);
 		free(answer);
-		close(fd);
 		return -1;
 	}
 
 	free(msg);	
 	free(answer);
-	close(fd);
-	printf(ANSI_COLOR_GREEN "unreg_sa: Successful!\n" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_GREEN "unreg_sa: Successful!" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_WHITE "\n");
 	return 0;
 }
 
@@ -265,25 +280,29 @@ char* reg_user(char* buffer, int n) {
 	printf("NEW MESSAGE: %s\n",buffer);
 
 	if(sscanf(buffer,"REG %[^'.'].%[^';'];%[^';'];%s",name,surname,ip,port)!= 4){
-		printf(ANSI_COLOR_RED "reg_user: Message format not recognized\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "reg_user: Message format not recognized" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		return "NOK - Message format not recognized";
 	}
 
 	/* For registration, client name must be equal to the server's name */
 	if(strcmp(servername,surname) != 0){
-		printf(ANSI_COLOR_RED "reg_user: Surname and servername don't match\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "reg_user: Surname and servername don't match" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		return "NOK - Surname and Servername don't match";
 	}
 
 	/* # is a special character reserved for deleted registrations, so no user can use it in it's name */
 	if(strstr(name,"#") != NULL){
-		printf(ANSI_COLOR_RED "reg_user: User tried registering a name with # character\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "reg_user: User tried registering a name with # character" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		return "NOK - Special character # is not allowed";
 	}
 
-	ufile = fopen(SRVFILE,"a+");
+	ufile = fopen(serverfile,"a+");
 	if(ufile == NULL) {
-		printf(ANSI_COLOR_RED "reg_user: error: %s\n" ANSI_COLOR_RESET,strerror(errno));
+		printf(ANSI_COLOR_RED "reg_user: error: %s" ANSI_COLOR_RESET,strerror(errno));
+		printf(ANSI_COLOR_WHITE "\n");
 		return "NOK - Client list not accessible";
 	}
 
@@ -292,7 +311,8 @@ char* reg_user(char* buffer, int n) {
 	while(fgets(temp,512,ufile) != NULL) {
 		if(strstr(temp,"#") != NULL) continue;
 		if((strcmp(temp, name)) == 0) {
-			printf(ANSI_COLOR_RED "User name not unique :(\n" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_RED "User name not unique :(" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_WHITE "\n");
 			fclose(ufile);
 			return "NOK - Username not unique";
 		}
@@ -301,10 +321,12 @@ char* reg_user(char* buffer, int n) {
 
 	if(fprintf(ufile,"%s;%s;%s\n",name,ip,port) < 0) {
 		printf(ANSI_COLOR_RED "reg_user: Error writing to file" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		fclose(ufile);
 		return "NOK - Client list not writable";
 	}
-	printf(ANSI_COLOR_GREEN "New user registration! :)\n" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_GREEN "New user registration! :)" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_WHITE "\n");
 	fclose(ufile);
 	return "OK";
 }
@@ -329,32 +351,37 @@ char* unreg_user(char *buffer, int n){
 	printf("NEW MESSAGE: %s\n",buffer);
 
 	if(sscanf(buffer,"UNR %[^'.'].%s",name,surname) != 2){
-		printf(ANSI_COLOR_RED "unreg_user: Message format not recognized\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "unreg_user: Message format not recognized" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		return "NOK - Message format not recognized";
 	}
 
 	/* For a user to be registered in the server, the server's name and the user's surname must match*/
 	if(strcmp(servername,surname) != 0) {
-		printf(ANSI_COLOR_RED "unreg_user: Surname and Server name don't match\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "unreg_user: Surname and Server name don't match" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		return "NOK - Surname and Server name don't match";
 	}
 	/* User's name must not contain the # character. Should not have registered with a # character,
 	   checking it here just to be sure */
 	if(strstr(name,"#") != 0){
-		printf(ANSI_COLOR_RED "unreg_user: User tried unregistering a name with # character\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "unreg_user: User tried unregistering a name with # character" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		return "NOK - Special character # is not allowed";
 	}
 
-	ufile = fopen(SRVFILE,"r+");
+	ufile = fopen(serverfile,"r+");
 	if(ufile == NULL) {
-		printf(ANSI_COLOR_RED "unreg_user: error: %s\n" ANSI_COLOR_RESET, strerror(errno));
+		printf(ANSI_COLOR_RED "unreg_user: error: %s" ANSI_COLOR_RESET, strerror(errno));
+		printf(ANSI_COLOR_WHITE "\n");
 		return "NOK - Client List not accessible";
 	}
 
 	/* Looking for user's name on our user file */
 	while(fgets(temp,512,ufile) != NULL) {
 		if(sscanf(temp,"%[^';'];%[^';'];%s",tempname,tempip,tempport) != 3) {
-			printf(ANSI_COLOR_RED "unreg_user: Error parsing file contents\n" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_RED "unreg_user: Error parsing file contents" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_WHITE "\n");
 			fclose(ufile);
 			return "NOK - Error with local file";
 		}
@@ -363,11 +390,13 @@ char* unreg_user(char *buffer, int n){
 			lineNb = ftell(ufile);
 			fseek(ufile,lineNb-(int)strlen(temp),SEEK_SET);	/* Setting file pointer to the beginning of the line */
 			if(fprintf(ufile,"#") < 0) { /* Substituting first character of the line with a # */
-				printf(ANSI_COLOR_RED "unreg_user: error unregistering user\n" ANSI_COLOR_RESET);
+				printf(ANSI_COLOR_RED "unreg_user: error unregistering user" ANSI_COLOR_RESET);
+				printf(ANSI_COLOR_WHITE "\n");
 				fclose(ufile);
 				return "NOK - Error with local file";
 			}
-			printf(ANSI_COLOR_GREEN "User unregistered :(\n" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_GREEN "User unregistered :(" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_WHITE "\n");
 			fclose(ufile);
 			return "OK";
 		}
@@ -388,59 +417,23 @@ char* unreg_user(char *buffer, int n){
 *  returns: string w/ reply from surname server in the format surname;snpip;snpport
 *           empty string if not successfull
 */
-char* qry_asrv(struct hostent* h, int aport, char* surname) {
-	int fd,n,addrlen,msglen;
-	struct sockaddr_in addr;
-	struct in_addr *a;
+char* qry_asrv(char* saip, char* saport, char* surname) {
+	int msglen;
 	char *msg, *answer;
-	char buffer[512];
-
-	fd=socket(AF_INET,SOCK_DGRAM,0);
-	if(fd==-1) {
-		printf(ANSI_COLOR_RED "qry_asrv: error opening socket\n" ANSI_COLOR_RESET);
-		return "";
-	}
-
-	a=(struct in_addr*)h->h_addr_list[0];
-	memset((void*)&addr,(int)'\0',sizeof(addr));
-	addr.sin_family=AF_INET;
-	addr.sin_addr=*a;
-	addr.sin_port=htons(aport);
 
 	msglen = strlen("SQRY ") + strlen(surname);
 	msg = malloc(msglen * sizeof(char) + 1);
 	if(sprintf(msg,"SQRY %s",surname) != (msglen)){
-		printf(ANSI_COLOR_RED "qry_asrv: error printing message\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "qry_asrv: error printing message" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		free(msg);
-		close(fd);
 		return "";
 	}	
 
-	/* Sending it to the Surname Server */
-	n=sendto(fd,msg,msglen,0,(struct sockaddr*)&addr,sizeof(addr));
-	if(n==-1) {
-		printf(ANSI_COLOR_RED "qry_asrv: error sending to surname server\n" ANSI_COLOR_RESET);
-		free(msg);
-		close(fd);
-		return "";
-	}
-
-	/* Receiving to check if OK */
-	addrlen = sizeof(addr);
-	n=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
-	if(n==-1) {
-		printf(ANSI_COLOR_RED "qry_asrv: error receiving from surname server\n" ANSI_COLOR_RESET);
-		free(msg);
-		close(fd);
-		return "";
-	}
-
-	answer = malloc(n);
-	sprintf(answer,"%.*s",n,buffer);
-
+	answer = comUDP(msg,saip,saport);
 	free(msg);	
-	close(fd);
-	printf(ANSI_COLOR_GREEN "qry_asrv: Successful!\n" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_GREEN "qry_asrv: Successful!" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_WHITE "\n");
 	return answer;
 }
 
@@ -456,73 +449,26 @@ char* qry_asrv(struct hostent* h, int aport, char* surname) {
 *           empty string if not successfull
 */
 char* qry_namesrv(char* snpip, char* snpport, char* firstname, char* surname) {
-	int fd,n,addrlen,msglen,port;
-	struct hostent* h;
-	struct in_addr* a;
-	struct sockaddr_in addr;
-	struct in_addr temp;
+	int msglen;
 	char *msg, *answer;
-	char buffer[512];
-
-	/* Converting ip and creating h struct */
-	inet_pton(AF_INET, snpip, &temp);
-	if((h=gethostbyaddr(&temp,sizeof(temp),AF_INET))==NULL){
-		printf(ANSI_COLOR_RED "qry_namesrv: Couldn't reach np server\n" ANSI_COLOR_RESET);
-		return "";
-	}
-
-	/* Converting port number */
-	port = atoi(snpport);
-
-	/* Opening socket */
-	fd=socket(AF_INET,SOCK_DGRAM,0);
-	if(fd == -1) {
-		printf(ANSI_COLOR_RED "qry_namesrv: error: %s\n" ANSI_COLOR_RESET,strerror(errno));
-		return "";
-	}
-
-	a=(struct in_addr*)h->h_addr_list[0];
-	memset((void*)&addr,(int)'\0',sizeof(addr));
-	addr.sin_family=AF_INET;
-	addr.sin_addr=*a;
-	addr.sin_port=htons(port);
 
 	/* Preparing msg */
 	msglen = strlen("QRY ") + strlen(firstname) + strlen(".") + strlen(surname);
 	msg = malloc(msglen*sizeof(char)+1);
 
 	if(sprintf(msg,"QRY %s.%s",firstname,surname) != (msglen)){
-		printf(ANSI_COLOR_RED "qry_namesrv: error printing message\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "qry_namesrv: error printing message" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		free(msg);
 		return "";
 	}
 
-	/* Sending it to the name Server */
-	n=sendto(fd,msg,msglen,0,(struct sockaddr*)&addr,sizeof(addr));
-	if(n==-1) {
-		printf(ANSI_COLOR_RED "qry_namesrv: error sending to surname server\n" ANSI_COLOR_RESET);
-		free(msg);
-		close(fd);
-		return "";
-	}
-
-	/* Receiving to check if OK */
-	addrlen = sizeof(addr);
-	n=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
-	if(n==-1) {
-		printf(ANSI_COLOR_RED "qry_namesrv: error receiving from surname server\n" ANSI_COLOR_RESET);
-		free(msg);
-		close(fd);
-		return "";
-	}
-
-	answer = malloc(n);
-
-	sprintf(answer,"%.*s",n,buffer);
+	/* Sending message */
+	answer = comUDP(msg,snpip,snpport);
 
 	free(msg);	
-	close(fd);
-	printf(ANSI_COLOR_GREEN "qry_namesrv: Successful!\n" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_GREEN "qry_namesrv: Successful!" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_WHITE "\n");
 	return answer;
 }
 
@@ -534,7 +480,7 @@ char* qry_namesrv(char* snpip, char* snpport, char* firstname, char* surname) {
 *   returns: string with info of user if successful
 *            string with NOK if unsuccessful
 */
-char* find_user(char* buffer,int n,struct hostent *h, int aport) {
+char* find_user(char* buffer,int n,char* saip, char* saport) {
 	FILE *ufile;
 	int found = 0;
 	char name[128],surname[128];
@@ -556,22 +502,25 @@ char* find_user(char* buffer,int n,struct hostent *h, int aport) {
 
 	if(strcmp(surname,servername) == 0) {
 		/* Search on our file */
-		ufile = fopen(SRVFILE,"r");
+		ufile = fopen(serverfile,"r");
 		if(ufile == NULL) return "NOK - client list unreachable";
 		while(fgets(temp,512,ufile) != NULL){
 			if(sscanf(temp,"%[^';'];%[^';'];%s",tempname,tempip,tempport) != 3) {
-				printf(ANSI_COLOR_RED "find_user: Error parsing file contents\n" ANSI_COLOR_RESET);
+				printf(ANSI_COLOR_RED "find_user: Error parsing file contents" ANSI_COLOR_RESET);
+				printf(ANSI_COLOR_WHITE "\n");
 				fclose(ufile);
 				return "NOK - Error with local file";
 			}
 			if((strstr(temp,"#") == NULL) && (strcmp(tempname,name) == 0)) {
-				printf(ANSI_COLOR_GREEN "find_user: found\n" ANSI_COLOR_RESET);
+				printf(ANSI_COLOR_GREEN "find_user: found" ANSI_COLOR_RESET);
+				printf(ANSI_COLOR_WHITE "\n");
 				found = 1;
 				break;
 			}
 		}
 		if(found != 1) {
-			printf(ANSI_COLOR_RED "find_user: User not found\n");
+			printf(ANSI_COLOR_RED "find_user: User not found" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_WHITE "\n");
 			return "NOK - User not found";
 		}
 		reply = malloc((7+strlen(name)+strlen(surname)+strlen(tempip)+strlen(tempport))*sizeof(char)+1);
@@ -580,13 +529,16 @@ char* find_user(char* buffer,int n,struct hostent *h, int aport) {
 	}
 	else {
 		/* Query surname server */
-		reply = qry_asrv(h, aport, surname);
+		reply = qry_asrv(saip, saport, surname);
 		if(strcmp(reply,"") == 0) printf(ANSI_COLOR_RED "find_user: not found" ANSI_COLOR_RESET);
 		if(sscanf(reply,"SRPL %[^';'];%[^';'];%s",surname,snpip,snpport) != 3) return "NOK - Reply not parseable";
 
 		/* Query np server */	
 		reply = qry_namesrv(snpip, snpport, name, surname);
-		if(strcmp(reply,"") == 0) printf(ANSI_COLOR_RED "find_user: not found\n" ANSI_COLOR_RESET);
+		if(strcmp(reply,"") == 0) {
+			printf(ANSI_COLOR_RED "find_user: not found" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_WHITE "\n");
+		}
 		/* return the reply*/
 		printf("find_user: reply: %s\n",reply);
 	}
@@ -597,32 +549,25 @@ char* find_user(char* buffer,int n,struct hostent *h, int aport) {
  * --------------------
  * Main program yo, dis' the server
  *
- *  h: structure with host information about the surname server
- *  aport: integer with surname server port
- *  surname: string with the surname to be unregistered 
- *
  *  returns:  0 if terminated cleanly
  *            -1 any other case
- *	TODO: Validate surname, snpip, snpport, saip, saport
- *		  Implement the protocol
- *        Implement exit command
- *        Implement list command
- *		  Comment
- *		  Create .h and .c auxiliary files	
+ *	TODO: Create .h and .c auxiliary files	
  */
 int main(int argc, char* argv[]) {
-	int stop = 0;
-	struct hostent *h;
-	char options[10] = "n:s:q:i:p:";
-	char localinput[512];
-	char *surname = NULL ,*snpip = NULL ,*snpport = NULL,*saip = NULL,*saport = NULL;
-	char *reply;
-	char c;	
-	int len,addrlen, ret, nread, port, aport;
-	struct in_addr temp;
+	int stop = 0; /* Used in the while loop so the program exits cleanly */
+	/* Variables related with UDP communication */
+	struct hostent *h; 	
+	int len,addrlen, ret, nread, port;
 	struct sockaddr_in addr;
 	char buffer[128];
 	char *answer;
+	char *reply;
+	/*Variables related with standard input */
+	char localinput[512];
+	/* Variables related to main arguments */
+	char c;
+	char options[10] = "n:s:q:i:p:"; /* Required and optional arguments for main (used in getopt) */
+	char *surname = NULL ,*snpip = NULL ,*snpport = NULL,*saip = NULL,*saport = NULL;
 	/* File descriptors, pointer */
 	int fd;
 	fd_set rfds;
@@ -670,36 +615,36 @@ int main(int argc, char* argv[]) {
 	}
 
 	servername = surname;
+	serverfile = malloc((strlen(servername)+strlen(SRVFILE) + 1)*sizeof(char) + 1);
+	sprintf(serverfile,"%s.%s",servername,SRVFILE);
+
+	printf("serverfile name: %s\n",serverfile);
 
 	/* Check if saip or saport are set, otherwise use default values */
 	if(saip == NULL) {
 		if((h=gethostbyname("tejo.tecnico.ulisboa.pt"))==NULL) {
-			printf(ANSI_COLOR_RED "Couldn't reach default host\n" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_RED "Couldn't reach default host" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_WHITE "\n");
 			return -1;
 		}
-	}else{
-		inet_pton(AF_INET, saip, &temp);
-		if((h=gethostbyaddr(&temp,sizeof(temp),AF_INET))==NULL){
-			printf(ANSI_COLOR_RED "Couldn't reach surname server\n" ANSI_COLOR_RESET);
-			return -1;
-		}
+		saip = inet_ntoa(*(struct in_addr*)h->h_addr_list[0]);
 	}
 
 	if(saport == NULL) {
-		aport = 58000;
-	}else{
-		aport = atoi(saport);
+		saport = "58000";
 	}
 
 	/* Get port where our server will listen */
 	if(sscanf(snpport,"%d\n",&port)!=1) {
-		printf(ANSI_COLOR_RED "error: port is not a valid number\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "error: port is not a valid number" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		return -1;
 	}
 	
 	/* Open UDP socket for our server */
 	if((fd=socket(AF_INET,SOCK_DGRAM,0))==-1) {
-		printf(ANSI_COLOR_RED "error: %s\n" ANSI_COLOR_RESET,strerror(errno));
+		printf(ANSI_COLOR_RED "error: %s" ANSI_COLOR_RESET,strerror(errno));
+		printf(ANSI_COLOR_WHITE "\n");
 		return -1;
 	}	
 	
@@ -712,27 +657,34 @@ int main(int argc, char* argv[]) {
 	/* Assigning name to socket */
 	ret=bind(fd,(struct sockaddr*)&addr,sizeof(addr));
 	if(ret==-1){
-		printf(ANSI_COLOR_RED "Error binding name to socket\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "Error binding name to socket" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		close(fd);
 		return -1;
 	}
 
-	/* Registering with surname server                                * 
-	 * --NEEDS: Check if aport,surname,localip and snpport are valid  */
+	/* Registering with surname server                                */
 	printf("Attempting surname registering...\n");
-	if(reg_sa(h,aport,surname,snpip,snpport)==-1) {
-		printf(ANSI_COLOR_RED "error registering with surname server\n" ANSI_COLOR_RESET);	
+	if(reg_sa(saip,saport,surname,snpip,snpport)==-1) {
+		printf(ANSI_COLOR_RED "error registering with surname server" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");	
 		return -1;
 	}
 
+	/* Resetting server file */
 	if(reset_file() == -1) {
-		printf(ANSI_COLOR_RED "error resetting file\n" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_RED "error resetting file" ANSI_COLOR_RESET);
+		printf(ANSI_COLOR_WHITE "\n");
 		close(fd);
 		return -1;
 	}
 
+	/* Allocating memory for first 3 chars of buffer (facilitates message parsing) */
+	answer = malloc(3*sizeof(char));
+	
 	/* Begin listening  */
-	printf(ANSI_COLOR_GREEN "Welcome to our server!\n" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_GREEN "Welcome to our server!" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_WHITE "\n");
 	while(!stop) {
 		FD_ZERO(&rfds);
 		FD_SET(fd,&rfds);
@@ -740,7 +692,8 @@ int main(int argc, char* argv[]) {
 		maxfd=fd;
 
 		if(select(maxfd+1,&rfds,NULL,NULL,NULL)<0){
-			printf(ANSI_COLOR_RED "Select() error: %s\n" ANSI_COLOR_RESET,strerror(errno));
+			printf(ANSI_COLOR_RED "Select() error: %s" ANSI_COLOR_RESET,strerror(errno));
+			printf(ANSI_COLOR_WHITE "\n");
 			stop = 1;
 		}
 
@@ -748,34 +701,38 @@ int main(int argc, char* argv[]) {
 			addrlen=sizeof(addr);
 			nread=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
 			if(nread==-1) {
-				printf(ANSI_COLOR_RED "Error receiving bytes, closing...\n" ANSI_COLOR_RESET);
+				printf(ANSI_COLOR_RED "Error receiving bytes, closing..." ANSI_COLOR_RESET);
+				printf(ANSI_COLOR_WHITE "\n");
 				close(fd);
 				stop = 1;
 			}
 
 			/* Parsing... */
-			answer = malloc(3);
 			sprintf(answer,"%.*s",3,buffer);
 
 			if(strcmp(answer,"REG") == 0){
 				reply = reg_user(buffer,nread);
 				if(sendto(fd,reply,strlen(reply),0,(struct sockaddr*)&addr,addrlen) == -1){
-					printf(ANSI_COLOR_RED "Error replying to user\n" ANSI_COLOR_RESET);
+					printf(ANSI_COLOR_RED "Error replying to user" ANSI_COLOR_RESET);
+					printf(ANSI_COLOR_WHITE "\n");
 				}
 			}else if(strcmp(answer,"UNR")==0){
 				reply = unreg_user(buffer,nread);
 				if(sendto(fd,reply,strlen(reply),0,(struct sockaddr*)&addr,addrlen) == -1) {
-					printf(ANSI_COLOR_RED "Error replying to user\n" ANSI_COLOR_RESET);
+					printf(ANSI_COLOR_RED "Error replying to user" ANSI_COLOR_RESET);
+					printf(ANSI_COLOR_WHITE "\n");
 				}
 			}else if(strcmp(answer,"QRY")==0){
-				reply = find_user(buffer,nread,h,aport);
+				reply = find_user(buffer,nread,saip,saport);
 				if(sendto(fd,reply,strlen(reply),0,(struct sockaddr*)&addr,addrlen) == -1){
-					printf(ANSI_COLOR_RED "Error replying to user\n" ANSI_COLOR_RESET);
+					printf(ANSI_COLOR_RED "Error replying to user" ANSI_COLOR_RESET);
+					printf(ANSI_COLOR_WHITE "\n");
 				}
 			}else {
 				printf(ANSI_COLOR_RED "Command not recognized\n" ANSI_COLOR_RESET);
 				if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1){
-						printf(ANSI_COLOR_RED "Error replying to user\n" ANSI_COLOR_RESET);
+						printf(ANSI_COLOR_RED "Error replying to user" ANSI_COLOR_RESET);
+						printf(ANSI_COLOR_WHITE "\n");
 					}
 			}
 		}
@@ -785,10 +742,13 @@ int main(int argc, char* argv[]) {
 			if(localinput[len-1] == '\n') localinput[len-1] = '\0';
 			if(strcmp(localinput,"exit") == 0) stop=1;
 			else if(strcmp(localinput,"list") == 0) list_users();
+			else if(strcmp(localinput, "help") == 0) help();
 		}
 	}
-	unreg_sa(h,aport,surname);	
+	unreg_sa(saip,saport,surname);
+	free(answer);	
 	close(fd);
-	printf(ANSI_COLOR_GREEN "Bye Bye :(\n" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_GREEN "Bye Bye :(" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_WHITE "\n");
 	return 0;	
 }
