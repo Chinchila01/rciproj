@@ -274,6 +274,7 @@ int unreg_sa(char* saip, char* saport, char* surname){
 char* reg_user(char* buffer, int n) {
 	FILE *ufile;
 	char name[128], surname[128], ip[128], port[128];
+	char tempname[128],tempip[128],tempport[128];
 	char temp[512];
 	buffer[n] = '\0';
 
@@ -309,8 +310,13 @@ char* reg_user(char* buffer, int n) {
 	/* Checking username is unique */
 	fseek(ufile,0L,SEEK_SET);
 	while(fgets(temp,512,ufile) != NULL) {
+		if(sscanf(temp,"%[^';'];%[^';'];%s",tempname,tempip,tempport) != 3) {
+			printf(ANSI_COLOR_RED "Error parsing clientlist" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_WHITE "\n");
+			return "NOK - Error parsing clientlist";
+		}
 		if(strstr(temp,"#") != NULL) continue;
-		if((strcmp(temp, name)) == 0) {
+		if((strcmp(tempname, name)) == 0) {
 			printf(ANSI_COLOR_RED "User name not unique :(" ANSI_COLOR_RESET);
 			printf(ANSI_COLOR_WHITE "\n");
 			fclose(ufile);

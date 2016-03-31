@@ -7,13 +7,13 @@ snp: snp.c
 schat: schat.c
 	$(CC) $(CFLAGS) schat.c -o schat 
 
-unreguser:	unreguser.c
+unreguser: unreguser.c
 	$(CC) $(CFLAGS) unreguser.c -o unreguser
 
 unregister: unregister.c
 	$(CC) $(CFLAGS) unregister.c -o unregister
 
-tcp_connect.c: tcp_connect.c
+tcp_connect: tcp_connect.c
 	$(CC) $(CFLAGS) tcp_connect.c -o tcp_connect
 
 all: snp schat unreguser unregister tcp_connect

@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <netdb.h>
+#include <unistd.h>
 
 int main(int argc, char* argv[]){
 	int fd,n,addrlen;
@@ -40,7 +41,7 @@ int main(int argc, char* argv[]){
 	msg = malloc(strlen(buffer));
 	msg = buffer;
 
-	printf("%d %s\n",strlen(msg),msg);
+	printf("%zu %s\n",strlen(msg),msg);
 
 	n=sendto(fd,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
 	if(n==-1){
@@ -48,7 +49,7 @@ int main(int argc, char* argv[]){
 		exit(1);
 	}
 	addrlen=sizeof(addr);
-	n=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,&addrlen);
+	n=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
 	if(n==-1){
 		printf("Unsuccessful 2\n");
 		exit(1);

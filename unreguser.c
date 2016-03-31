@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <netdb.h>
+#include <unistd.h>
 
 int main(){
 	int fd,n,addrlen;
@@ -33,7 +34,7 @@ int main(){
 		exit(1);
 	}
 	addrlen=sizeof(addr);
-	n=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,&addrlen);
+	n=recvfrom(fd,buffer,128,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
 	if(n==-1){
 		printf("Unsuccessful 2\n");
 		exit(1);
