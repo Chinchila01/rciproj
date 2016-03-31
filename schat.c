@@ -22,6 +22,8 @@
 #define ANSI_COLOR_WHITE   "\x1B[37m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
+#define HASHTABLE "hashtable.txt"
+
 #define max(A,B) ((A)>=(B)?(A):(B))
 
 typedef int bool;
@@ -32,7 +34,10 @@ typedef int bool;
 #define init 0 // Initial State
 #define registered 1
 #define onChat_received 2
-#define onChat_sent 3 
+#define onChat_sent 3
+#define onChat_authenticating_step_1 4 
+#define onChat_authenticating_step_2 5
+#define onChat_authenticating_step_3 6
 
 int stateMachine = init;
 
@@ -48,6 +53,42 @@ int surDir_sock;
 int show_usage(){
 	printf("Usage: schat –n name.surname –i ip -p scport -s snpip -q snpport\n");
 	return -1;
+
+}
+
+/* Function: encrypt
+ * --------------------
+ * Encrypt byte according to table on hashTable
+ *
+ * returns: encrypted byte if successful
+ *          empty char if error ocurred
+ */
+int encrypt(int c) {
+	FILE *table;
+	char buffer[512];
+	int encrypted;
+	int i;
+
+	printf("entra; %d\n", c);
+
+	table = fopen(HASHTABLE,"r");
+
+	if(table == NULL) {
+		printf(ANSI_COLOR_RED "encrypt: error: %s",strerror(errno));
+		printf(ANSI_COLOR_WHITE "\n");
+		return NULL;
+	}
+
+	for(i = 0;i < c+1 ; i++){
+		fgets(buffer,512,table);
+	}
+
+	sscanf(buffer,"%d",&encrypted);
+		
+	printf(ANSI_COLOR_GREEN "encrypt: Successful - %d", encrypted);
+	printf(ANSI_COLOR_WHITE "\n" );
+	fclose(table);
+	return encrypted;
 
 }
 
@@ -247,6 +288,10 @@ int main(int argc, char* argv[]) {
 
 	char remote_port [24];
 	char remote_ip [24];
+	char friend_name [128];
+
+	int randNum;
+	int randChar,encrypted,recvChar;
 
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
@@ -426,10 +471,16 @@ int main(int argc, char* argv[]) {
 								return -1;
 							}
 
+							nw = write(fd_out,in_name_surname,strlen(in_name_surname));
+
+							if (nw <= 1){
+								printf("Could not send message.\n");
+							}
+
 							printf(ANSI_COLOR_GREEN "\nConnected with %s !!\n" ANSI_COLOR_RESET, name2connect);
 							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
-							stateMachine = onChat_sent;
+							stateMachine = onChat_authenticating_step_1; //onChat_sent;
 						}	
 					}				
 				}
@@ -536,17 +587,26 @@ int main(int argc, char* argv[]) {
 			printf(ANSI_COLOR_GREEN "\nReceived incoming connection !!\n" ANSI_COLOR_RESET);
 			printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
+			stateMachine = onChat_authenticating_step_1;
+
 		}
+
+		// Incoming connection
 
 		if (newfd != NULL){
 
-			stateMachine = onChat_received;
+			//stateMachine = onChat_received;
 
 			if(FD_ISSET(newfd,&rfds)){
 					
 				memset(buffer, 0, sizeof(buffer));
 
 				n=read(newfd,buffer,512);
+
+				printf("State: %d\n",stateMachine);
+
+				printf(ANSI_COLOR_RED "%s: %s" ANSI_COLOR_RESET,friend_name, buffer);
+				printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
 				if(n == -1){
 					printf("ERROR: Cannot read message\n");
@@ -556,11 +616,67 @@ int main(int argc, char* argv[]) {
 				 	close(newfd);
 				 	newfd = NULL;
 				}else{
-					printf(ANSI_COLOR_CYAN "your friend: %s" ANSI_COLOR_RESET, buffer);
-					printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
+
+					if (stateMachine == onChat_received){
+
+							printf(ANSI_COLOR_CYAN "%s: %s" ANSI_COLOR_RESET,friend_name, buffer);
+							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
+					
+					}else if(stateMachine == onChat_authenticating_step_1){
+						
+						// check if the name is well formatted
+						strcpy(friend_name,buffer);
+
+						srand(time(NULL));
+						randNum = (rand() % 256) + 0;
+
+						randChar = randNum;
+
+						printf("generated: %d %c\n",randNum, randChar);
+
+						sprintf(buffer,"AUTH %d\n",randChar);
+
+						nw = write(newfd,buffer,strlen(buffer));
+
+						stateMachine = onChat_authenticating_step_2;
+
+					}else if (stateMachine == onChat_authenticating_step_2){
+						
+						encrypted = encrypt(randChar);
+
+						sscanf(buffer,"AUTH %d",&recvChar);
+
+						if(recvChar == encrypted) {
+							/* Authenticated! */
+							printf("Authenticated !!!\n");
+
+							stateMachine = onChat_authenticating_step_3;
+						} //else
+
+						stateMachine = onChat_authenticating_step_3;
+
+					}else if (stateMachine == onChat_authenticating_step_3){
+						
+						printf("BOLO: %s", buffer);
+
+						sscanf(buffer,"AUTH %d",&randChar);
+
+						encrypted = encrypt(randChar);
+
+						printf("Received %d | encrypted %d\n", randChar, encrypted);
+
+						sprintf(buffer,"AUTH %d\n",encrypted);
+							
+						nw = write(newfd,buffer,strlen(buffer));
+
+						stateMachine = onChat_received;
+						
+					}
 				}
 			}
 		}
+
+		// Outgoing connection
 
 		if (fd_out != NULL){
 			if(FD_ISSET(fd_out,&rfds)){
@@ -569,18 +685,67 @@ int main(int argc, char* argv[]) {
 
 				n=read(fd_out,buffer,512);
 
+				printf("State: %d\n",stateMachine);
+
+				printf(ANSI_COLOR_RED "%s: %s" ANSI_COLOR_RESET, name2connect, buffer);
+				printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
 				if(n == -1){
-					printf("ERROR: Cannot read message\n");
-				}else if(n == 0){
-					printf(ANSI_COLOR_RED "Connection closed by your friend." ANSI_COLOR_RESET);
-					printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
-				 	close(fd_out);
-				 	fd_out = NULL;
-				}else{
-					printf(ANSI_COLOR_CYAN "%s: %s" ANSI_COLOR_RESET, name2connect, buffer);
-					printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
-				}				
+						printf("ERROR: Cannot read message\n");
+					}else if(n == 0){
+						printf(ANSI_COLOR_RED "Connection closed by your friend." ANSI_COLOR_RESET);
+						printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
+					 	close(fd_out);
+					 	fd_out = NULL;
+					}else{
+						if (stateMachine == onChat_received){
+							
+							printf(ANSI_COLOR_CYAN "%s: %s" ANSI_COLOR_RESET, name2connect, buffer);
+							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
+										
+						}else if (stateMachine == onChat_authenticating_step_1){
+
+							printf("BOLO: %s", buffer);
+
+							sscanf(buffer,"AUTH %d",&randChar);
+
+							encrypted = encrypt(randChar);
+
+							printf("Received %d | encrypted %d\n", randChar, encrypted);
+
+							sprintf(buffer,"AUTH %d\n",encrypted);
+							
+							nw = write(fd_out,buffer,strlen(buffer));
+
+							srand(time(NULL));
+							randNum = (rand() % 256) + 0;
+
+							randChar = randNum;
+
+							printf("generated: %d %c\n",randNum, randChar);
+
+							sprintf(buffer,"AUTH %d\n",randChar);
+
+							nw = write(fd_out,buffer,strlen(buffer));
+
+							stateMachine = onChat_authenticating_step_2;
+
+						}else if (stateMachine == onChat_authenticating_step_2){
+
+							encrypted = encrypt(randChar);
+
+							sscanf(buffer,"AUTH %d",&recvChar);
+
+							if(recvChar == encrypted) {
+								/* Authenticated! */
+								printf("Authenticated !!!\n");
+
+								stateMachine = onChat_sent;
+							} //else
+
+							printf("SO QUE NAO\n");
+						}
+					}
 			}
 		}
 		
