@@ -70,8 +70,6 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	addr.sin_addr=*a;
 	addr.sin_port=htons(atoi(dst_port));
 
-	printf("UDP Sending: %s\n", msg);
-
 	n=sendto(surDir_sock,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
 	if(n==-1) {
 		printf("UDP error: sending message to the server\n");
@@ -92,8 +90,6 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 
 	answer=malloc(n);
 	sprintf(answer,"%.*s",n,buffer);
-
-	printf("Raw answer: %s\n",answer);
 
 	close(surDir_sock);
 

@@ -82,7 +82,11 @@ int encrypt(int c) {
 		fgets(buffer,512,table);
 	}
 
-	sscanf(buffer,"%d",&encrypted);
+	if(sscanf(buffer,"%d",&encrypted) != 1) {
+		printf(ANSI_COLOR_RED "encrypt: error parsing file");
+		printf(ANSI_COLOR_WHITE "\n");
+		return NULL;
+	}
 		
 	fclose(table);
 
