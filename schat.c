@@ -69,8 +69,6 @@ int encrypt(int c) {
 	int encrypted;
 	int i;
 
-	printf("entra; %d\n", c);
-
 	table = fopen(HASHTABLE,"r");
 
 	if(table == NULL) {
@@ -85,11 +83,9 @@ int encrypt(int c) {
 
 	sscanf(buffer,"%d",&encrypted);
 		
-	printf(ANSI_COLOR_GREEN "encrypt: Successful - %d", encrypted);
-	printf(ANSI_COLOR_WHITE "\n" );
 	fclose(table);
-	return encrypted;
 
+	return encrypted;
 }
 
 char * comUDP(char * msg, char * dst_ip, char * dst_port){
@@ -293,6 +289,10 @@ int main(int argc, char* argv[]) {
 	int randNum;
 	int randChar,encrypted,recvChar;
 
+	int yes=1; 
+
+	srand(time(NULL)); /* initializing pseudo-random number generator */
+
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
 		switch(c)
@@ -336,9 +336,17 @@ int main(int argc, char* argv[]) {
 
 	printf("Connection Data:\nLocalhost:%s:%s\nSurname Server:%s:%s\n",in_ip,in_scport,in_snpip,in_snpport);
 
+	if((fd=socket(AF_INET,SOCK_STREAM,0)) == -1){
+		exit(1);
+	}
 
-	if((fd=socket(AF_INET,SOCK_STREAM,0))==-1)exit(1);//error
-			
+	// DEIXAMOS ISTO? É A MELHOR FORMA DE RESOLVER O PROBLEMA?? E O SIGPIPE???
+	// avoid the "Address already in use" error message immediately after closing socket
+	if(setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof(int)) == -1) { 
+		perror("setsockopt"); 
+		exit(1); 
+	}
+	
 	memset((void*)&addr,(int)'\0',sizeof(addr));
 	addr.sin_family=AF_INET;
 	addr.sin_addr.s_addr=htonl(INADDR_ANY);
@@ -525,7 +533,6 @@ int main(int argc, char* argv[]) {
 
 			}else if(strcmp(usrIn,"exit\n") == 0){
 
-				// checkar se nao fizemos leave antes !!!!!!!!!!!!! - maquina de estados
 				usrExit(in_snpip, in_snpport,in_name_surname);
 
 				shutdown(fd_out, SHUT_RDWR);
@@ -533,8 +540,8 @@ int main(int argc, char* argv[]) {
 				shutdown(fd, SHUT_RDWR);
 
 				close(newfd);
-				close(fd);
 				close(fd_out);
+				close(fd);
 
 				newfd = NULL;
 				fd = NULL;
@@ -595,18 +602,11 @@ int main(int argc, char* argv[]) {
 
 		if (newfd != NULL){
 
-			//stateMachine = onChat_received;
-
 			if(FD_ISSET(newfd,&rfds)){
 					
 				memset(buffer, 0, sizeof(buffer));
 
 				n=read(newfd,buffer,512);
-
-				printf("State: %d\n",stateMachine);
-
-				printf(ANSI_COLOR_RED "%s: %s" ANSI_COLOR_RESET,friend_name, buffer);
-				printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
 				if(n == -1){
 					printf("ERROR: Cannot read message\n");
@@ -627,12 +627,9 @@ int main(int argc, char* argv[]) {
 						// check if the name is well formatted
 						strcpy(friend_name,buffer);
 
-						srand(time(NULL));
 						randNum = (rand() % 256) + 0;
 
 						randChar = randNum;
-
-						printf("generated: %d %c\n",randNum, randChar);
 
 						sprintf(buffer,"AUTH %d\n",randChar);
 
@@ -647,17 +644,18 @@ int main(int argc, char* argv[]) {
 						sscanf(buffer,"AUTH %d",&recvChar);
 
 						if(recvChar == encrypted) {
-							/* Authenticated! */
-							printf("Authenticated !!!\n");
+							printf(ANSI_COLOR_GREEN "%s -> Authenticated !!" ANSI_COLOR_RESET, friend_name);
+							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
 							stateMachine = onChat_authenticating_step_3;
-						} //else
+						}else{
+							printf(ANSI_COLOR_RED "%s -> Not authorized." ANSI_COLOR_RESET, friend_name);
+							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
-						stateMachine = onChat_authenticating_step_3;
+							stateMachine = registered;
+						}
 
 					}else if (stateMachine == onChat_authenticating_step_3){
-						
-						printf("BOLO: %s", buffer);
 
 						sscanf(buffer,"AUTH %d",&randChar);
 
@@ -685,11 +683,6 @@ int main(int argc, char* argv[]) {
 
 				n=read(fd_out,buffer,512);
 
-				printf("State: %d\n",stateMachine);
-
-				printf(ANSI_COLOR_RED "%s: %s" ANSI_COLOR_RESET, name2connect, buffer);
-				printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
-
 				if(n == -1){
 						printf("ERROR: Cannot read message\n");
 					}else if(n == 0){
@@ -698,14 +691,12 @@ int main(int argc, char* argv[]) {
 					 	close(fd_out);
 					 	fd_out = NULL;
 					}else{
-						if (stateMachine == onChat_received){
+						if (stateMachine == onChat_sent){
 							
 							printf(ANSI_COLOR_CYAN "%s: %s" ANSI_COLOR_RESET, name2connect, buffer);
 							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 										
 						}else if (stateMachine == onChat_authenticating_step_1){
-
-							printf("BOLO: %s", buffer);
 
 							sscanf(buffer,"AUTH %d",&randChar);
 
@@ -717,12 +708,9 @@ int main(int argc, char* argv[]) {
 							
 							nw = write(fd_out,buffer,strlen(buffer));
 
-							srand(time(NULL));
 							randNum = (rand() % 256) + 0;
 
 							randChar = randNum;
-
-							printf("generated: %d %c\n",randNum, randChar);
 
 							sprintf(buffer,"AUTH %d\n",randChar);
 
@@ -737,13 +725,16 @@ int main(int argc, char* argv[]) {
 							sscanf(buffer,"AUTH %d",&recvChar);
 
 							if(recvChar == encrypted) {
-								/* Authenticated! */
-								printf("Authenticated !!!\n");
+								printf(ANSI_COLOR_GREEN "%s -> Authenticated !!" ANSI_COLOR_RESET, name2connect);
+								printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
 								stateMachine = onChat_sent;
-							} //else
+							}else{
+								printf(ANSI_COLOR_RED "%s -> Not authorized." ANSI_COLOR_RESET, name2connect);
+								printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
-							printf("SO QUE NAO\n");
+								stateMachine = registered;
+							}
 						}
 					}
 			}
