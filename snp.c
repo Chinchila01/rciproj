@@ -54,15 +54,22 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	struct hostent* h;
 	char buffer[512];
 	char * answer;
+	struct timeval tv;
 
 	/* Open UDP socket for our server */
 	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
 		printf("UDP error: %s\n",strerror(errno));
 		return NULL;
 	}	
-	
+
 	inet_pton(AF_INET, dst_ip, &temp);
-	h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
+	if((h=gethostbyaddr(&temp,sizeof(temp),AF_INET)) == NULL) {
+		printf("UDP error: sending message to the server\n");
+		free(msg);
+		close(surDir_sock);
+		return NULL;
+	}
+
 	a=(struct in_addr*)h->h_addr_list[0];
 
 	memset((void*)&addr,(int)'\0',sizeof(addr));
@@ -76,6 +83,13 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 		free(msg);
 		close(surDir_sock);
 		return NULL;
+	}
+
+	tv.tv_sec = 5;
+	tv.tv_usec = 0;
+
+	if (setsockopt(surDir_sock, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
+    	perror("Error");
 	}
 
 	addrlen = sizeof(addr);
@@ -92,7 +106,7 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	sprintf(answer,"%.*s",n,buffer);
 
 	close(surDir_sock);
-
+	free(msg);
 	return answer;
 }
 
@@ -196,17 +210,21 @@ int reg_sa(char* saip, char* saport, char* surname, char* localip, char* snpport
 	}
 
 	answer = comUDP(msg, saip,saport);
+	if(answer == NULL) {
+		printf(ANSI_COLOR_RED "reg_sa: error sending contacting surname server. Are you sure the address is right?");
+		printf(ANSI_COLOR_WHITE "\n");
+		return -1;
+	}
+
 	if(strcmp(answer,"OK") != 0) {
 		printf(ANSI_COLOR_RED "%s" ANSI_COLOR_RESET,answer);
 		printf(ANSI_COLOR_WHITE "\n");
 		free(answer);
-		free(msg);
 		return -1;
 	}
 
 	printf(ANSI_COLOR_GREEN "reg_sa: Successful!" ANSI_COLOR_RESET);
 	printf(ANSI_COLOR_WHITE "\n");
-	free(msg);
 	return 0;
 }
 
@@ -241,15 +259,19 @@ int unreg_sa(char* saip, char* saport, char* surname){
 
 	answer = comUDP(msg,saip,saport);
 
+	if(answer == NULL) {
+		printf(ANSI_COLOR_RED "unreg_sa: error sending contacting surname server. Are you sure the address is right?");
+		printf(ANSI_COLOR_WHITE "\n");
+		return -1;
+	}
+
 	if(strcmp(answer,"OK") != 0){
 		printf(ANSI_COLOR_RED "%s" ANSI_COLOR_RESET,answer);
 		printf(ANSI_COLOR_WHITE "\n");
-		free(msg);
 		free(answer);
 		return -1;
 	}
 
-	free(msg);	
 	free(answer);
 	printf(ANSI_COLOR_GREEN "unreg_sa: Successful!" ANSI_COLOR_RESET);
 	printf(ANSI_COLOR_WHITE "\n");
@@ -433,7 +455,13 @@ char* qry_asrv(char* saip, char* saport, char* surname) {
 	}	
 
 	answer = comUDP(msg,saip,saport);
-	free(msg);	
+
+	if(answer == NULL) {
+		printf(ANSI_COLOR_RED "unreg_sa: error sending contacting surname server. Are you sure the address is right?");
+		printf(ANSI_COLOR_WHITE "\n");
+		return "";
+	}
+
 	printf(ANSI_COLOR_GREEN "qry_asrv: Successful!" ANSI_COLOR_RESET);
 	printf(ANSI_COLOR_WHITE "\n");
 	return answer;
@@ -468,7 +496,12 @@ char* qry_namesrv(char* snpip, char* snpport, char* firstname, char* surname) {
 	/* Sending message */
 	answer = comUDP(msg,snpip,snpport);
 
-	free(msg);	
+	if(answer == NULL) {
+		printf(ANSI_COLOR_RED "unreg_sa: error sending contacting surname server. Are you sure the address is right?");
+		printf(ANSI_COLOR_WHITE "\n");
+		return "";
+	}
+
 	printf(ANSI_COLOR_GREEN "qry_namesrv: Successful!" ANSI_COLOR_RESET);
 	printf(ANSI_COLOR_WHITE "\n");
 	return answer;
@@ -574,6 +607,10 @@ int main(int argc, char* argv[]) {
 	int fd;
 	fd_set rfds;
 	int maxfd;
+	/* Loop variables */
+	int retry = 1;
+	char cinput = 0;
+	char reconnectInput[512]; 
 
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
@@ -666,12 +703,28 @@ int main(int argc, char* argv[]) {
 	}
 
 	/* Registering with surname server                                */
-	printf("Attempting surname registering...\n");
-	if(reg_sa(saip,saport,surname,snpip,snpport)==-1) {
-		printf(ANSI_COLOR_RED "error registering with surname server" ANSI_COLOR_RESET);
-		printf(ANSI_COLOR_WHITE "\n");	
-		return -1;
-	}
+	do{
+		printf("Attempting surname registering...\n");
+		if(reg_sa(saip,saport,surname,snpip,snpport)==-1) {
+			printf(ANSI_COLOR_RED "error registering with surname server" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_WHITE "\n");	
+			//return -1;
+			
+			printf(ANSI_COLOR_BLUE "Want to try to reconnect? (Y)es/(N)0");
+			printf(ANSI_COLOR_WHITE "\n");
+			fgets(reconnectInput,512,stdin);
+			sscanf(reconnectInput,"%c\n",&cinput);
+			if(cinput == 'N'){
+				close(fd);
+				return -1;
+			}
+			else{ 
+				retry = 1; 
+				cinput=0;
+			}
+		}else retry = 0;
+
+	}while(retry == 1);
 
 	/* Resetting server file */
 	if(reset_file() == -1) {
