@@ -18,6 +18,7 @@
 #define ANSI_COLOR_RESET "\x1b[0m"
 #define SRVFILE "clientlist"
 
+/* Structure where we list valid commands and description, to be used by function help() */
 struct command_d{
 	char* cmd_name;
 	char* cmd_help;
@@ -28,11 +29,17 @@ const commands[] = {
 	{"help", "Prints a rudimentary help"}
 };
 
-int ncmd = sizeof(commands)/sizeof(commands[0]);
+int ncmd = sizeof(commands)/sizeof(commands[0]); /* Number of commands */
 extern int errno;
-char* servername;
-char* serverfile;
+char* servername; /* Surname served by this server */
+char* serverfile; /* file name of the server, used to store the registered clients' list */
 
+/* Function: help
+*  -------------------
+*  Displays a list of all commands available and a description
+* 
+*  returns: 0
+*/
 int help() {
 	int i;
 
@@ -45,6 +52,17 @@ int help() {
 	return 0;
 }
 
+/* Function: comUDP
+*  -------------------
+*  Sends a UDP message and waits for an answer
+* 
+*  Parameters: char* msg -> message to be sent
+*  			   char* dst_ip -> ip of the destination of the message
+*              char* dst_port -> port of the destination of the message
+*
+*  returns: Reply in char* format
+*           NULL if error ocurred
+*/
 char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	int surDir_sock;
 	struct sockaddr_in addr;
@@ -64,7 +82,7 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 
 	inet_pton(AF_INET, dst_ip, &temp);
 	if((h=gethostbyaddr(&temp,sizeof(temp),AF_INET)) == NULL) {
-		printf("UDP error: sending message to the server\n");
+		printf("UDP error: sending getting host information\n");
 		free(msg);
 		close(surDir_sock);
 		return NULL;
@@ -85,6 +103,7 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 		return NULL;
 	}
 
+	/* Setting UDP message timeout */
 	tv.tv_sec = 5;
 	tv.tv_usec = 0;
 
@@ -94,7 +113,6 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 
 	addrlen = sizeof(addr);
 	n=recvfrom(surDir_sock,buffer,512,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
-
 	if(n==-1) {
 		printf("UDP error: receiving message to the server\n");
 		free(msg);
@@ -168,9 +186,9 @@ int reset_file(){
 /*
  * Function:  show_usage
  * --------------------
- * Show the correct usage of the program command
+ * Show the correct usage of the program commands
  *
- *  returns:  -1 always (when this runs, it means something about the user's entered arguments went wrong)
+ *  returns: -1 always (when this runs, it means something about the user's entered arguments went wrong)
  */
 int show_usage(){
 	printf("Usage: snp -n surname -s snpip -q snpport [-i saip] [-p saport]\n");
@@ -183,11 +201,11 @@ int show_usage(){
  * --------------------
  * Registers a surname on the surname server using UDP messages.
  *
- *  h: structure with host information about the surname server
- *  aport: integer with surname server port
- *  surname: string with the surname to be unregistered 
- *  localip: ip of the machine in which the local server is located
- *  snpport: port that the local server is listening to
+ *  Parameters: char* saip    -> pointer to a string that contains the surname server's ip address in xxx.xxx.xxx.xxx format
+ *  	 		char* saport  -> pointer to a string that contains the surname server's port
+ *  		    char* surname -> pointer to a string with the surname to be registered 
+ *  			char* localip -> ip of the machine in which the local server is located
+ *  			char* snpport -> port that the local server is listening to
  *
  *  returns:  0 if register was successful
  *			 -1 if unregister was unsuccessful	
@@ -233,15 +251,13 @@ int reg_sa(char* saip, char* saport, char* surname, char* localip, char* snpport
  * --------------------
  * Unregisters a surname from the surname server using UDP messages.
  *
- *  h: structure with host information about the surname server
- *  aport: integer with surname server port
- *  surname: string with the surname to be unregistered 
+ *  Parameters: char* saip    -> pointer to a string with surname server's ip address in format xxx.xxx.xxx.xxx
+ *  			char* saport  -> pointer to a string with surname server's port number
+ *  			char* surname -> pointer to a string with the surname to be unregistered 
  *
- *  returns:  0 if unregister was successfull
- *	     -1 if unregister was unsuccessfull
- *	TODO: 
+ *  returns:  0 if unregister was successful
+ *	         -1 if unregister was unsuccessful	
  */
-
 int unreg_sa(char* saip, char* saport, char* surname){
 	int msglen;
 	char *msg, *answer;
@@ -282,9 +298,8 @@ int unreg_sa(char* saip, char* saport, char* surname){
 *  -----------------------
 *  Registers a user
 *
-*  buffer: message received from client in format REG name.surname;ip;port
-*  n: number of bytes read by the server
-*  fd: file descriptor of file where server stores user information
+*  Parameters: char* buffer -> pointer to a string with user's information in format REG name;surname;ip;port
+*              	 int n      -> integer with number of bytes received
 *
 *  Returns: "OK" if successful
 *	       "NOK - " + error specification if error occurs
@@ -359,8 +374,8 @@ char* reg_user(char* buffer, int n) {
 *  --------------------
 *  Unregisters a user
 *
-*  buffer: message received from client
-*  n: number of bytes read
+*  Parameters: char* buffer -> pointer to a string with user's information in format UNR name;surname
+*  			     int n      -> integer with number of bytes received
 *
 *  returns: "OK" if unregister is successful
 *          "NOK - " + error specification if error occurs
@@ -432,14 +447,14 @@ char* unreg_user(char *buffer, int n){
 
 /* Function: qry_asrv
 *  -------------------
-*  surname: surname to query the surname server
+*  Function to query surname server about the location of an np server with a certain surname
 *
-*  h: structure with address information
-*  aport: surname server port
-*  surname: surname to query address
+*  Parameters: char* saip   -> pointer to a string with the surname server's ip address in format xxx.xxx.xxx.xxx
+*  			   char* saport -> pointer to a string with the surname server's port number
+*  			   char* surname-> surname to query surname server
 *
 *  returns: string w/ reply from surname server in the format surname;snpip;snpport
-*           empty string if not successfull
+*           empty string if not successful
 */
 char* qry_asrv(char* saip, char* saport, char* surname) {
 	int msglen;
@@ -469,11 +484,12 @@ char* qry_asrv(char* saip, char* saport, char* surname) {
 
 /* Function: qry_namesrv
 *  -------------------
-*  surname: surname to query the proper name server
+*  Function to query the proper name server
 *
-*  snpip: proper name server ip 
-*  snpport: proper name server port
-*  surname: surname to query address
+*  Parameters: char* snpip -> pointer to a string with proper name server ip address in format xxx.xxx.xxx.xxx
+*  			   char* snpport-> pointer to a string with proper name server port number
+*			   char* firstname -> pointer to a string with firstname to query address
+*  			   char* surname -> pointer to a string with surname to query address
 *
 *  returns: string w/ reply from proper name server in the format surname;snpip;snpport
 *           empty string if not successfull
@@ -509,11 +525,15 @@ char* qry_namesrv(char* snpip, char* snpport, char* firstname, char* surname) {
 
 /* Function: find_user
 *  -----------------------
+*  Uses qry_aserv or qry_namesrv if needed to find the location of a user
 *
-*   Uses qry_aserv or qry_namesrv if needed to find the location of a user
+*  Parameters: char* buffer -> pointer to a string with query in format QRY name.surname
+*                int n      -> integer with number of bytes received
+*              char* saip   -> pointer to a string with surname server's ip address in format xxx.xxx.xxx.xxx
+*			   char* saport -> pointer to a string with surname server's port number
 *
-*   returns: string with info of user if successful
-*            string with NOK if unsuccessful
+*  returns: string with info of user if successful
+*           string with NOK if unsuccessful
 */
 char* find_user(char* buffer,int n,char* saip, char* saport) {
 	FILE *ufile;
@@ -524,7 +544,6 @@ char* find_user(char* buffer,int n,char* saip, char* saport) {
 	char buff2[512],temp[512];
 	char* reply;
 
-	printf("find_user: starting...\n");
 	sprintf(buff2,"%s\n",buffer);
 	buff2[n] = '\0';
 
@@ -582,11 +601,16 @@ char* find_user(char* buffer,int n,char* saip, char* saport) {
 /*
  * Function:  main
  * --------------------
- * Main program yo, dis' the server
+ * Main program - where our proper name server starts
+ *
+ *  Options: -n -> surname of proper name server
+ *           -s -> ip address of the machine where proper name server is hosted in format xxx.xxx.xxx.xxx
+ *           -q -> port number where the proper name server is going to listen
+ *           -i -> [Optional] ip address of surname server in format xxx.xxx.xxx.xxx
+ *           -p -> [Optional] port number of surname server
  *
  *  returns:  0 if terminated cleanly
- *            -1 any other case
- *	TODO: Create .h and .c auxiliary files	
+ *           -1 any other case
  */
 int main(int argc, char* argv[]) {
 	int stop = 0; /* Used in the while loop so the program exits cleanly */
@@ -599,7 +623,7 @@ int main(int argc, char* argv[]) {
 	char *reply;
 	/*Variables related with standard input */
 	char localinput[512];
-	/* Variables related to main arguments */
+	/* Variables related to command line arguments */
 	char c;
 	char options[10] = "n:s:q:i:p:"; /* Required and optional arguments for main (used in getopt) */
 	char *surname = NULL ,*snpip = NULL ,*snpport = NULL,*saip = NULL,*saport = NULL;

@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <time.h>
 
+/* Terminal colors definition */
 #define ANSI_COLOR_RED     "\x1b[31m"
 #define ANSI_COLOR_GREEN   "\x1b[32m"
 #define ANSI_COLOR_YELLOW  "\x1b[33m"
@@ -23,6 +24,7 @@
 #define ANSI_COLOR_WHITE   "\x1B[37m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
+/* Name of file where hashtable is located */
 #define HASHTABLE "hashtable.txt"
 
 #define max(A,B) ((A)>=(B)?(A):(B))
@@ -31,8 +33,8 @@ typedef int bool;
 #define true 1
 #define false 0
 
-// Program States
-#define init 0 // Initial State
+/* Program States */
+#define init 0 /* Initial State */
 #define registered 1
 #define onChat_received 2
 #define onChat_sent 3
@@ -60,6 +62,8 @@ int show_usage(){
 /* Function: encrypt
  * --------------------
  * Encrypt byte according to table on hashTable
+ *
+ * Parameters: int c -> byte to encrypt
  *
  * returns: encrypted byte if successful
  *          empty char if error ocurred
@@ -93,6 +97,17 @@ int encrypt(int c) {
 	return encrypted;
 }
 
+/* Function: comUDP
+*  -------------------
+*  Sends a UDP message and waits for an answer
+* 
+*  Parameters: char* msg      -> message to be sent
+*  			   char* dst_ip   -> ip of the destination of the message
+*              char* dst_port -> port of the destination of the message
+*
+*  returns: Reply in char* format
+*           NULL if error ocurred
+*/
 char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	struct sockaddr_in addr;
 	struct in_addr *a;
@@ -101,6 +116,7 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	struct hostent* h;
 	char buffer[512];
 	char * answer;
+	struct timeval tv;
 
 	/* Open UDP socket for our server */
 	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
@@ -109,7 +125,13 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	}	
 	
 	inet_pton(AF_INET, dst_ip, &temp);
-	h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
+	if((h=gethostbyaddr(&temp,sizeof(temp),AF_INET)) == NULL) {
+		printf("UDP error: sending getting host information\n");
+		free(msg);
+		close(surDir_sock);
+		return NULL;
+	}
+
 	a=(struct in_addr*)h->h_addr_list[0];
 
 	memset((void*)&addr,(int)'\0',sizeof(addr));
@@ -125,6 +147,14 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 		free(msg);
 		close(surDir_sock);
 		return NULL;
+	}
+
+	/* Setting UDP message timeout */
+	tv.tv_sec = 5;
+	tv.tv_usec = 0;
+
+	if (setsockopt(surDir_sock, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
+    	perror("Error");
 	}
 
 	addrlen = sizeof(addr);
@@ -143,11 +173,23 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	printf("Raw answer: %s\n",answer);
 
 	close(surDir_sock);
-
+	free(msg);
 	return answer;
 }
 
-
+/* Function: usrRegister
+*  -------------------
+*  Registers a user
+* 
+*  Parameters: char* snpip    -> pointer to string with proper name server's ip address in format xxx.xxx.xxx.xxx
+*  			   char* port     -> pointer to a string with proper name server's port number
+*              char* fullname -> pointer to a string with full name of user in format name.surname
+*			   char* my_ip    -> pointer to a string with user ip address in format xxx.xxx.xxx.xxx
+*              char* my_port  -> pointer to a string with user port number
+*
+*  returns: true if registration was successful
+*           false if error ocurred
+*/
 bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char * my_port){
 	char * msg;
 	char buffer[512];
@@ -176,7 +218,17 @@ bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char
 	return true;
 }
 
-
+/* Function: usrExit
+*  -------------------
+*  Unregisters the user from the proper name server
+* 
+*  Parameters: char* snpip    -> pointer to string with proper name server's ip address in format xxx.xxx.xxx.xxx
+*  			   char* port     -> pointer to a string with proper name server's port number
+*              char* fullname -> pointer to a string with full name of user in format name.surname
+*
+*  returns: true if unregistration was successful
+*           false if error ocurred
+*/
 bool usrExit(char * snpip, char * port, char * full_name){
 	char buffer[512];
 	char *answer;
@@ -205,6 +257,17 @@ bool usrExit(char * snpip, char * port, char * full_name){
 	return true;
 }
 
+/* Function: queryUser
+*  -------------------
+*  Queries proper name server about the location of a certain user
+* 
+*  Parameters: char* snpip -> pointer to string with proper name server's ip address in format xxx.xxx.xxx.xxx
+*  			   char* port  -> pointer to a string with proper name server's port number
+*              char* user  -> pointer to a string with user's name to query about in format name.fullname
+*
+*  returns: string with user's location if query was successful
+*           NULL if user was not found or an error ocurred
+*/
 char * queryUser(char * snpip, char * port, char * user){
 	char buffer[512], garb_0[512];
 	char *answer;
@@ -245,18 +308,14 @@ char * queryUser(char * snpip, char * port, char * user){
  * --------------------
  * Main program yo, dis' the server
  *
- *  h: structure with host information about the surname server
- *  aport: integer with surname server port
- *  surname: string with the surname to be unregistered 
- *
+ * Options: -n -> name of user of our application in format name.surname
+ *          -i -> ip address of machine running our application in format xxx.xxx.xxx.xxx
+ *			-p -> port number where our schat will communicate
+ *          -s -> ip address of proper name server in format xxx.xxx.xxx.xxx
+ *          -q -> port number of proper name server
+ *            
  *  returns:  0 if terminated cleanly
- *            -1 any other case
- *	TODO: Validate surname, snpip, snpport, saip, saport
- *		  Implement the protocol
- *        Implement exit command
- *        Implement list command
- *		  Comment
- *		  Create .h and .c auxiliary files	
+ *           -1 any other case
  */
 
 int main(int argc, char* argv[]) {
