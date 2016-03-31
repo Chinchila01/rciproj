@@ -126,7 +126,6 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	inet_pton(AF_INET, dst_ip, &temp);
 	if((h=gethostbyaddr(&temp,sizeof(temp),AF_INET)) == NULL) {
 		printf("UDP error: sending getting host information\n");
-		free(msg);
 		close(surDir_sock);
 		return NULL;
 	}
@@ -143,7 +142,6 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	n=sendto(surDir_sock,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
 	if(n==-1) {
 		printf("UDP error: sending message to the server\n");
-		free(msg);
 		close(surDir_sock);
 		return NULL;
 	}
@@ -161,14 +159,13 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 
 	if(n==-1) {
 		printf("UDP error: receiving message to the server\n");
-		free(msg);
 		close(surDir_sock);
 		return NULL;
 	}
 
 	answer=malloc(n);
 	sprintf(answer,"%.*s",n,buffer);
-	
+
 	printf("Raw answer: %s\n",answer);
 
 	close(surDir_sock);
@@ -209,11 +206,12 @@ bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char
 
 	if(strcmp(answer,"OK") != 0) {
 		printf("Error: %s\n",answer);
+		free(answer);
 		return false;
 	}
 
 	printf("User registration successful!\n");
-
+	free(answer);
 	return true;
 }
 
@@ -455,9 +453,12 @@ int main(int argc, char* argv[]) {
 			fgets(usrIn,100,stdin);
 
 			if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
-				usrRegister(in_snpip, in_snpport,in_name_surname,in_ip,in_scport);
-
-				stateMachine = registered;
+				if(usrRegister(in_snpip, in_snpport,in_name_surname,in_ip,in_scport)){
+					stateMachine = registered;
+				}else{
+					printf(ANSI_COLOR_RED "Registration failed :(");
+					printf(ANSI_COLOR_WHITE "\n");
+				}
 				/* close(fd); exit(0); */
 
 			}else if(strcmp(usrIn,"leave\n") == 0 && stateMachine != init){
@@ -596,7 +597,12 @@ int main(int argc, char* argv[]) {
 
 			}else if(strcmp(usrIn,"exit\n") == 0){
 
-				usrExit(in_snpip, in_snpport,in_name_surname);
+				if(stateMachine != init){
+					if(!usrExit(in_snpip, in_snpport,in_name_surname)) {
+						printf(ANSI_COLOR_RED "Unregistration was not possible, exiting anyway...");
+						printf(ANSI_COLOR_WHITE "\n");
+					}
+				}
 
 				shutdown(fd_out, SHUT_RDWR);
 				shutdown(newfd, SHUT_RDWR);
