@@ -56,7 +56,6 @@ int surDir_sock;
 int show_usage(){
 	printf("Usage: schat –n name.surname –i ip -p scport -s snpip -q snpport\n");
 	return -1;
-
 }
 
 /* Function: encrypt
@@ -169,11 +168,11 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 
 	answer=malloc(n);
 	sprintf(answer,"%.*s",n,buffer);
-
+	
 	printf("Raw answer: %s\n",answer);
 
 	close(surDir_sock);
-	free(msg);
+
 	return answer;
 }
 
@@ -650,7 +649,7 @@ int main(int argc, char* argv[]) {
 
 			addrlen=sizeof(addr);
 
-			if((newfd=accept(fd,(struct sockaddr*)&addr,&addrlen))==-1){
+			if((newfd=accept(fd,(struct sockaddr*)&addr,(socklen_t*)&addrlen))==-1){
 				printf("ERROR: Cannot start listening TCP.\n");
 				exit(1); //error
 			}
