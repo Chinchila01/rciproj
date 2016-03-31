@@ -611,6 +611,8 @@ int main(int argc, char* argv[]) {
 	int retry = 1;
 	char cinput = 0;
 	char reconnectInput[512]; 
+	int valid = 0;
+	char* garbage = NULL;
 
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
@@ -703,25 +705,31 @@ int main(int argc, char* argv[]) {
 	}
 
 	/* Registering with surname server                                */
+	/* If it fails, we prompt the user to check if he wants to try again or exit */
 	do{
 		printf("Attempting surname registering...\n");
 		if(reg_sa(saip,saport,surname,snpip,snpport)==-1) {
 			printf(ANSI_COLOR_RED "error registering with surname server" ANSI_COLOR_RESET);
 			printf(ANSI_COLOR_WHITE "\n");	
-			//return -1;
 			
-			printf(ANSI_COLOR_BLUE "Want to try to reconnect? (Y)es/(N)0");
-			printf(ANSI_COLOR_WHITE "\n");
-			fgets(reconnectInput,512,stdin);
-			sscanf(reconnectInput,"%c\n",&cinput);
-			if(cinput == 'N'){
-				close(fd);
-				return -1;
-			}
-			else{ 
-				retry = 1; 
-				cinput=0;
-			}
+			do {
+				printf(ANSI_COLOR_BLUE "Want to try to reconnect? (Y)es/(N)0");
+				printf(ANSI_COLOR_WHITE "\n");
+				fgets(reconnectInput,512,stdin);
+				sscanf(reconnectInput,"%c%s\n",&cinput,garbage);
+				if(cinput == 'N'){
+					valid = 0;
+					close(fd);
+					return -1;
+				}
+				else if(cinput == 'Y'){ 
+					valid = 0;
+					retry = 1; 
+				}else{
+					printf("Sorry, that option is not accepted\n");
+					valid = 1;
+				}
+			}while(valid);
 		}else retry = 0;
 
 	}while(retry == 1);
