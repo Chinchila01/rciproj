@@ -153,10 +153,9 @@ int show_usage(){
  * returns: encrypted byte if successful
  *          empty char if error ocurred
  */
-int encrypt(int c) {
+bool encrypt(unsigned int* encrypted, unsigned int c) {
 	FILE *table;
 	char buffer[512];
-	int encrypted;
 	int i;
 
 	table = fopen(HASHTABLE,"r");
@@ -164,22 +163,25 @@ int encrypt(int c) {
 	if(table == NULL) {
 		printf(ANSI_COLOR_RED "encrypt: error: %s",strerror(errno));
 		printf(ANSI_COLOR_WHITE "\n");
-		return NULL;
+		printf("lel");
+		encrypted = NULL;
+		return false;
 	}
 
 	for(i = 0;i < c+1 ; i++){
 		fgets(buffer,512,table);
 	}
 
-	if(sscanf(buffer,"%d",&encrypted) != 1) {
+	if(sscanf(buffer,"%u",encrypted) != 1) {
 		printf(ANSI_COLOR_RED "encrypt: error parsing file");
 		printf(ANSI_COLOR_WHITE "\n");
-		return NULL;
+		encrypted = NULL;
+		return false;
 	}
 		
 	fclose(table);
 
-	return encrypted;
+	return true;
 }
 
 /* Function: comUDP
@@ -402,10 +404,6 @@ char * queryUser(char * snpip, char * port, char * user){
  */
 
 int main(int argc, char* argv[]) {
-	FILE * fp_ip; // file for getting own ip
-	char ip_path[1035], garb_0[1035], ip[1035];
-	int lineCount = 2;
-
 	char usrIn[100];
 	char options[10] = "n:s:q:i:p:";
 	char *in_name_surname = NULL ,*in_ip = NULL ,*in_scport = NULL,*in_snpip = NULL,*in_snpport = NULL;
@@ -417,11 +415,9 @@ int main(int argc, char* argv[]) {
 	int fd = NULL, addrlen, newfd = NULL;
 	struct sockaddr_in addr;
 	int n, nw;
-	char *ptr;
 
 	int fd_out = NULL;
 	struct sockaddr_in addr_out;
-	char * dst_ip = "127.0.0.1";
 	struct in_addr temp;
 	struct hostent* h;
 	struct in_addr *a;
@@ -434,14 +430,14 @@ int main(int argc, char* argv[]) {
 	char friend_name [128];
 
 	int randNum;
-	int randChar,encrypted,recvChar;
+	unsigned int randChar,recvChar;
+	unsigned int *encrypted = NULL;
 
 	int yes=1; /* YESSSS */
 
-	srand(time(NULL)); /* initializing pseudo-random number generator */
-
 	int save_history = 0;
-	char* temp_name = NULL;
+
+	srand(time(NULL)); /* initializing pseudo-random number generator */
 
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
@@ -490,8 +486,8 @@ int main(int argc, char* argv[]) {
 		exit(1);
 	}
 
-	// DEIXAMOS ISTO? É A MELHOR FORMA DE RESOLVER O PROBLEMA?? E O SIGPIPE???
-	// avoid the "Address already in use" error message immediately after closing socket
+	/* DEIXAMOS ISTO? É A MELHOR FORMA DE RESOLVER O PROBLEMA?? E O SIGPIPE???
+	 avoid the "Address already in use" error message immediately after closing socket  */
 	if(setsockopt(fd,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof(int)) == -1) { 
 		perror("setsockopt"); 
 		exit(1); 
@@ -504,12 +500,12 @@ int main(int argc, char* argv[]) {
 
 	if(bind(fd,(struct sockaddr*)&addr,sizeof(addr))==-1){
 		printf("ERROR: Cannot bind.\n");
-		exit(1);//error
+		exit(1);
 	}
 
 	if(listen(fd,5)==-1){
 		printf("ERRO\n");
-		exit(1);//error
+		exit(1);
 	}
 
 	/* Creating directory for storing user conversation history */
@@ -616,11 +612,11 @@ int main(int argc, char* argv[]) {
 
 							sscanf(buffer,"%[^';'];%s",remote_ip, remote_port);
 
-							fd_out=socket(AF_INET,SOCK_STREAM,0);//TCP socket
+							fd_out=socket(AF_INET,SOCK_STREAM,0); /* TCP socket */
 
 							if(fd_out==-1){
 								printf("FAIL\n");
-								return -1;//error
+								return -1;
 							}
 
 							inet_pton(AF_INET, remote_ip, &temp);
@@ -649,7 +645,7 @@ int main(int argc, char* argv[]) {
 							printf(ANSI_COLOR_GREEN "\nConnected with %s !!\n" ANSI_COLOR_RESET, name2connect);
 							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
-							stateMachine = onChat_authenticating_step_1; //onChat_sent;
+							stateMachine = onChat_authenticating_step_1; /* onChat_sent */ 
 						}	
 					}				
 				}
@@ -659,8 +655,6 @@ int main(int argc, char* argv[]) {
 				memset(buffer, 0, sizeof(buffer));
 
 				sscanf(usrIn,"message %[^\n]", buffer);
-
-				//printf(ANSI_COLOR_CYAN "you: %s\n" ANSI_COLOR_RESET,buffer);
 
 				if (stateMachine == onChat_sent){
 
@@ -754,7 +748,7 @@ int main(int argc, char* argv[]) {
 
 			if((newfd=accept(fd,(struct sockaddr*)&addr,(socklen_t*)&addrlen))==-1){
 				printf("ERROR: Cannot start listening TCP.\n");
-				exit(1); //error
+				exit(1); 
 			}
 
 			printf(ANSI_COLOR_GREEN "\nReceived incoming connection !!\n" ANSI_COLOR_RESET);
@@ -764,7 +758,7 @@ int main(int argc, char* argv[]) {
 
 		}
 
-		// Incoming connection
+		/* Incoming connection */
 
 		if (newfd != NULL){
 
@@ -792,7 +786,7 @@ int main(int argc, char* argv[]) {
 					
 					}else if(stateMachine == onChat_authenticating_step_1){
 						
-						// check if the name is well formatted
+						/* check if the name is well formatted */
 						strcpy(friend_name,buffer);
 
 						randNum = (rand() % 256) + 0;
@@ -807,11 +801,17 @@ int main(int argc, char* argv[]) {
 
 					}else if (stateMachine == onChat_authenticating_step_2){
 						
-						encrypted = encrypt(randChar);
+						encrypt(encrypted, randChar);
+						if(encrypted == NULL) {
+							printf(ANSI_COLOR_RED "%s -> Not authorized",friend_name);
+							printf(ANSI_COLOR_WHITE "\n");
 
-						sscanf(buffer,"AUTH %d",&recvChar);
+							stateMachine = registered; 
+						}
 
-						if(recvChar == encrypted) {
+						sscanf(buffer,"AUTH %u",&recvChar);
+
+						if(recvChar == *encrypted) {
 							printf(ANSI_COLOR_GREEN "%s -> Authenticated !!" ANSI_COLOR_RESET, friend_name);
 							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
@@ -825,13 +825,13 @@ int main(int argc, char* argv[]) {
 
 					}else if (stateMachine == onChat_authenticating_step_3){
 
-						sscanf(buffer,"AUTH %d",&randChar);
+						sscanf(buffer,"AUTH %u",&randChar);
 
-						encrypted = encrypt(randChar);
+						encrypt(encrypted, randChar);
 
-						printf("Received %d | encrypted %d\n", randChar, encrypted);
+						printf("Received %d | encrypted %u\n", randChar, *encrypted);
 
-						sprintf(buffer,"AUTH %d\n",encrypted);
+						sprintf(buffer,"AUTH %u\n",*encrypted);
 							
 						nw = write(newfd,buffer,strlen(buffer));
 
@@ -842,7 +842,7 @@ int main(int argc, char* argv[]) {
 			}
 		}
 
-		// Outgoing connection
+		/* Outgoing connection */
 
 		if (fd_out != NULL){
 			if(FD_ISSET(fd_out,&rfds)){
@@ -868,13 +868,13 @@ int main(int argc, char* argv[]) {
 										
 						}else if (stateMachine == onChat_authenticating_step_1){
 
-							sscanf(buffer,"AUTH %d",&randChar);
+							sscanf(buffer,"AUTH %u",&randChar);
 
-							encrypted = encrypt(randChar);
+							encrypt(encrypted, randChar);
 
-							printf("Received %d | encrypted %d\n", randChar, encrypted);
+							printf("Received %d | encrypted %u\n", randChar, *encrypted);
 
-							sprintf(buffer,"AUTH %d\n",encrypted);
+							sprintf(buffer,"AUTH %u\n",*encrypted);
 							
 							nw = write(fd_out,buffer,strlen(buffer));
 
@@ -890,11 +890,11 @@ int main(int argc, char* argv[]) {
 
 						}else if (stateMachine == onChat_authenticating_step_2){
 
-							encrypted = encrypt(randChar);
+							encrypt(encrypted, randChar);
 
-							sscanf(buffer,"AUTH %d",&recvChar);
+							sscanf(buffer,"AUTH %u",&recvChar);
 
-							if(recvChar == encrypted) {
+							if(recvChar == *encrypted) {
 								printf(ANSI_COLOR_GREEN "%s -> Authenticated !!" ANSI_COLOR_RESET, name2connect);
 								printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
