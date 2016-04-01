@@ -13,6 +13,7 @@
 
 /* Terminal colors */
 #define ANSI_COLOR_BLUE "\x1b[34m"
+#define ANSI_COLOR_YELLOW  "\x1b[33m"
 #define ANSI_COLOR_RED "\x1b[31m"
 #define ANSI_COLOR_GREEN "\x1b[32m"
 #define ANSI_COLOR_WHITE   "\x1B[37m"
@@ -46,12 +47,15 @@ char* serverfile; /* file name of the server, used to store the registered clien
 int help() {
 	int i;
 
-	printf(ANSI_COLOR_BLUE "HELP - Here are the commands available:" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_BLUE "HELP - Here are the commands available:\n" ANSI_COLOR_RESET);
+	printf(ANSI_COLOR_BLUE "//------------------------------------------------\\\\");
 	printf(ANSI_COLOR_WHITE "\n");
 
 	for(i = 0; i < ncmd; i++) {
 		printf("%s - %s\n",commands[i].cmd_name,commands[i].cmd_help);
 	}
+	printf(ANSI_COLOR_BLUE "\\\\------------------------------------------------//");
+	printf(ANSI_COLOR_WHITE "\n");
 	return 0;
 }
 
@@ -635,6 +639,7 @@ int main(int argc, char* argv[]) {
 	fd_set rfds;
 	int maxfd;
 	/* Loop variables */
+	int i;
 	int retry = 1;
 	char cinput = 0;
 	char reconnectInput[512]; 
@@ -682,6 +687,18 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 
+	for(i = 0; i < strlen(surname); i++) {
+		if(isalpha(surname[i])) {
+			surname[i] = tolower(surname[i]);
+		}else{
+			printf(ANSI_COLOR_RED "Surname can only contain regular alphabet");
+			printf(ANSI_COLOR_WHITE "\n");
+			return -1;
+		}
+	}
+
+	printf(ANSI_COLOR_YELLOW "The surname will be lowercased to help with users finding it");
+	printf(ANSI_COLOR_WHITE "\n");
 	servername = surname;
 	serverfile = malloc((strlen(servername)+strlen(SRVFILE) + 1)*sizeof(char) + 1);
 	sprintf(serverfile,"%s.%s",servername,SRVFILE);
