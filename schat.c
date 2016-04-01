@@ -28,6 +28,24 @@
 /* Name of file where hashtable is located */
 #define HASHTABLE "hashtable.txt"
 
+/* Structure where we list valid commands and description, to be used by function help() */
+struct command_d{
+	char* cmd_name;
+	char* cmd_help;
+}
+const commands[] = {
+	{"join", "Joins the proper name server "},
+	{"leave", "Unregister and leave the proper name server"},
+	{"connect", "Connect to a peer"},
+	{"disconnect", "Disconnect from a peer"},
+	{"message", "Used to send a message to a connected peer"},
+	{"history","Shows old connections, enables quick reconnection and prints conversation history"},
+	{"exit","Exits the program cleanly"},
+	{"help","Prints a rudimentary help"}
+};
+
+int ncmd = sizeof(commands)/sizeof(commands[0]); /* Number of commands */
+
 #define max(A,B) ((A)>=(B)?(A):(B))
 
 typedef int bool;
@@ -48,6 +66,71 @@ int stateMachine = init;
 int surDir_sock;
 
 struct stat st = {0}; /* Sincerely, why do I need this? */
+
+/* Function: help
+*  -------------------
+*  Displays a list of all commands available and a description
+* 
+*  returns: 0
+*/
+int help() {
+	int i;
+
+	printf(ANSI_COLOR_BLUE "HELP - Here are the commands available:\n");
+	printf(ANSI_COLOR_BLUE "//------------------------------------------------\\\\");
+	printf(ANSI_COLOR_WHITE "\n");
+
+	for(i = 0; i < ncmd; i++) {
+		printf("\t %s - %s\n",commands[i].cmd_name,commands[i].cmd_help);
+	}
+	printf(ANSI_COLOR_BLUE "\\\\------------------------------------------------//");
+	printf(ANSI_COLOR_WHITE "\n");
+	return 0;
+}
+
+char* get_time(){
+	time_t timer;
+	char buffer[26];
+	char* timestring;
+	struct tm* tm_info;
+
+	time(&timer);
+	tm_info = localtime(&timer);
+
+	strftime(buffer, 26, "%Y:%m:%d %H:%M:%S", tm_info);
+
+	timestring = malloc(26*sizeof(char) + 1);
+	sprintf(timestring,"%s",buffer);
+
+	return timestring;
+}
+
+int print2history(char* msg, char* friend_name, char* full_name, int sent){
+	FILE* historyfile = NULL;
+	char* hfilename;
+	char buffer[512];
+
+	hfilename = malloc((22+strlen(friend_name)+strlen(full_name))*sizeof(char)+1);
+	sprintf(hfilename,"./conversations/%s.%s.conv",friend_name,full_name);
+	historyfile = fopen(hfilename,"a");
+	
+	if(historyfile != NULL){
+		if(sent == 0) {
+			fprintf(historyfile,"<%s>%s: %s\n",get_time(),friend_name,msg);
+			sprintf(buffer,"<%s>%s: %s\n",get_time(),friend_name,msg);
+		}else{
+			fprintf(historyfile,"<%s>%s: %s\n",get_time(),full_name,msg);
+			sprintf(buffer,"<%s>%s: %s\n",get_time(),full_name,msg);
+		}
+		fclose(historyfile);
+		printf("print2history: printed %s to file %s\n",buffer,hfilename);
+		return 0;
+	}else { 
+		printf(ANSI_COLOR_RED "The following message was not stored");
+		printf(ANSI_COLOR_WHITE "\n");
+		return -1;
+	}
+}
 
 /*
  * Function:  show_usage
@@ -358,8 +441,7 @@ int main(int argc, char* argv[]) {
 	srand(time(NULL)); /* initializing pseudo-random number generator */
 
 	int save_history = 0;
-	FILE* historyfile;
-	char* hfilename = NULL;
+	char* temp_name = NULL;
 
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
@@ -439,6 +521,7 @@ int main(int argc, char* argv[]) {
     	}
 	}
 
+	save_history = 1;
 	printf("Let's start..\n");
 
 	while(1){
@@ -454,8 +537,6 @@ int main(int argc, char* argv[]) {
 		maxfd = max(maxfd,fd_out);
 
  		memset(usrIn, 0, sizeof(usrIn));
-
- 		printf(""); /* WHY? */
 
 		counter=select(maxfd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,(struct timeval *)NULL);
 
@@ -586,9 +667,7 @@ int main(int argc, char* argv[]) {
 					nw = write(fd_out,buffer,strlen(buffer));
 
 				}else if(stateMachine == onChat_received){
-					
 					nw = write(newfd,buffer,strlen(buffer));
-
 				}
 
 				if (nw <= 1){
@@ -661,6 +740,8 @@ int main(int argc, char* argv[]) {
 					}else if(stateMachine == init){
 						printf("You have to be part of the network and messaging with someone to end the conversation.\nPlease join, you are welcome.\n");
 					}
+				}else if(strcmp(usrIn,"help\n") == 0){
+					help();
 				}else{
 					printf("You are not allowed to do that my friend.\n");
 				}
@@ -703,18 +784,8 @@ int main(int argc, char* argv[]) {
 				}else{
 
 					if (stateMachine == onChat_received){
-							
-							hfilename = malloc((22+strlen(friend_name)+strlen(in_name_surname))*sizeof(char)+1);
-							sprintf(hfilename,"./conversations/%s.%s.conv",friend_name,in_name_surname);
-							historyfile = fopen(hfilename,"a");
-							printf("lel\n");
-							if(historyfile != NULL){
-								fprintf(historyfile,"%s: %s\n",friend_name,buffer );
-								fclose(historyfile);
-							}else { 
-								printf(ANSI_COLOR_RED "The following message was not stored");
-								printf(ANSI_COLOR_WHITE "\n");
-							}
+
+							if(save_history) print2history(buffer,friend_name,in_name_surname,0);
 
 							printf(ANSI_COLOR_CYAN "%s: %s" ANSI_COLOR_RESET,friend_name, buffer);
 							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
@@ -790,6 +861,8 @@ int main(int argc, char* argv[]) {
 					}else{
 						if (stateMachine == onChat_sent){
 							
+							if(save_history) print2history(buffer,friend_name,in_name_surname,0);
+
 							printf(ANSI_COLOR_CYAN "%s: %s" ANSI_COLOR_RESET, name2connect, buffer);
 							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 										
