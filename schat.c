@@ -33,6 +33,8 @@ struct command_d{
 	char* cmd_name;
 	char* cmd_help;
 }
+
+//nao esquecer find
 const commands[] = {
 	{"join", "Joins the proper name server "},
 	{"leave", "Unregister and leave the proper name server"},
@@ -62,8 +64,6 @@ typedef int bool;
 #define onChat_authenticating_step_3 6
 
 int stateMachine = init;
-
-int surDir_sock;
 
 struct stat st = {0}; /* Sincerely, why do I need this? */
 
@@ -153,7 +153,7 @@ int show_usage(){
  * returns: encrypted byte if successful
  *          empty char if error ocurred
  */
-bool encrypt(unsigned int* encrypted, unsigned int c) {
+bool encrypt(unsigned char* encrypted, unsigned char c) {
 	FILE *table;
 	char buffer[512];
 	int i;
@@ -163,15 +163,18 @@ bool encrypt(unsigned int* encrypted, unsigned int c) {
 	if(table == NULL) {
 		printf(ANSI_COLOR_RED "encrypt: error: %s",strerror(errno));
 		printf(ANSI_COLOR_WHITE "\n");
-		printf("lel");
 		encrypted = NULL;
 		return false;
 	}
+
+	printf("ESTE É O C: %u\n",c);
 
 	for(i = 0;i < c+1 ; i++){
 		fgets(buffer,512,table);
 	}
 
+	printf("ESTE É O i: %d\n",i);
+printf("ESTE É O buff: %s\n",buffer);
 	if(sscanf(buffer,"%u",encrypted) != 1) {
 		printf(ANSI_COLOR_RED "encrypt: error parsing file");
 		printf(ANSI_COLOR_WHITE "\n");
@@ -180,6 +183,8 @@ bool encrypt(unsigned int* encrypted, unsigned int c) {
 	}
 		
 	fclose(table);
+
+	printf("\nENCRYPT: in - %u | out - %u\n\n",c,*encrypted);
 
 	return true;
 }
@@ -204,6 +209,7 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	char buffer[512];
 	char * answer;
 	struct timeval tv;
+	int surDir_sock;
 
 	/* Open UDP socket for our server */
 	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
@@ -288,7 +294,6 @@ bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char
 
 	if (answer == NULL){
 		printf("UDP error: empty message received\n");
-		close(surDir_sock);
 		return false;
 	}
 
@@ -328,7 +333,6 @@ bool usrExit(char * snpip, char * port, char * full_name){
 
 	if (answer == NULL){
 		printf("UDP error: empty message received\n");
-		close(surDir_sock);
 		return false;
 	}
 
@@ -368,7 +372,6 @@ char * queryUser(char * snpip, char * port, char * user){
 
 	if (answer == NULL){
 		printf("UDP error: empty message received\n");
-		close(surDir_sock);
 		return NULL;
 	}
 
@@ -430,8 +433,8 @@ int main(int argc, char* argv[]) {
 	char friend_name [128];
 
 	int randNum;
-	unsigned int randChar,recvChar;
-	unsigned int *encrypted = NULL;
+	unsigned char randChar,recvChar;
+	unsigned char *encrypted = NULL;
 
 	int yes=1; /* YESSSS */
 
@@ -601,7 +604,7 @@ int main(int argc, char* argv[]) {
 					}else{
 						location = queryUser(in_snpip, in_snpport, name2connect);
 
-						if (location == NULL){
+						if (strcmp(location,"") == 0){
 							printf("Ups.. User not found.\n");
 						}else{
 							printf("User located at: %s\n", location);
@@ -636,7 +639,9 @@ int main(int argc, char* argv[]) {
 								return -1;
 							}
 
-							nw = write(fd_out,in_name_surname,strlen(in_name_surname));
+							sprintf(buffer,"NAME %s",in_name_surname);
+
+							nw = write(fd_out,buffer,strlen(buffer));
 
 							if (nw <= 1){
 								printf("Could not send message.\n");
@@ -787,13 +792,15 @@ int main(int argc, char* argv[]) {
 					}else if(stateMachine == onChat_authenticating_step_1){
 						
 						/* check if the name is well formatted */
-						strcpy(friend_name,buffer);
+						
+						sscanf(buffer,"NAME %s\n",friend_name);
 
 						randNum = (rand() % 256) + 0;
 
 						randChar = randNum;
 
-						sprintf(buffer,"AUTH %d\n",randChar);
+						sprintf(buffer,"AUTH %c",(unsigned char)randChar);
+						printf("buffer: %s\n",buffer);
 
 						nw = write(newfd,buffer,strlen(buffer));
 
@@ -803,6 +810,7 @@ int main(int argc, char* argv[]) {
 						
 						encrypted = malloc(sizeof(unsigned char));
 						encrypt(encrypted, randChar);
+						printf("after encrypt: %c\n",*encrypted);
 						if(encrypted == NULL) {
 							printf(ANSI_COLOR_RED "%s -> Not authorized",friend_name);
 							printf(ANSI_COLOR_WHITE "\n");
@@ -810,11 +818,12 @@ int main(int argc, char* argv[]) {
 							stateMachine = registered; 
 						}
 
-						sscanf(buffer,"AUTH %u",&recvChar);
-
+						sscanf(buffer,"AUTH %c",&recvChar);
+						printf("Recv Char : u: %u, c: %c", recvChar, recvChar);
 						if(recvChar == *encrypted) {
 							printf(ANSI_COLOR_GREEN "%s -> Authenticated !!" ANSI_COLOR_RESET, friend_name);
 							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
+							printf("recvChar not the same - %u - %u\n",recvChar,*encrypted);
 
 							stateMachine = onChat_authenticating_step_3;
 						}else{
@@ -826,14 +835,14 @@ int main(int argc, char* argv[]) {
 
 					}else if (stateMachine == onChat_authenticating_step_3){
 
-						sscanf(buffer,"AUTH %u",&randChar);
+						sscanf(buffer,"AUTH %c",&randChar);
 
 						encrypted = malloc(sizeof(unsigned char));
 						encrypt(encrypted, randChar);
 
 						printf("Received %d | encrypted %u\n", randChar, *encrypted);
 
-						sprintf(buffer,"AUTH %u\n",*encrypted);
+						sprintf(buffer,"AUTH %c",*encrypted);
 							
 						nw = write(newfd,buffer,strlen(buffer));
 
@@ -870,14 +879,14 @@ int main(int argc, char* argv[]) {
 										
 						}else if (stateMachine == onChat_authenticating_step_1){
 
-							sscanf(buffer,"AUTH %u",&randChar);
+							sscanf(buffer,"AUTH %c",&randChar);
 
 							encrypted = malloc(sizeof(unsigned char));
 							encrypt(encrypted, randChar);
 
 							printf("Received %d | encrypted %u\n", randChar, *encrypted);
 
-							sprintf(buffer,"AUTH %u\n",*encrypted);
+							sprintf(buffer,"AUTH %c",*encrypted);
 							
 							nw = write(fd_out,buffer,strlen(buffer));
 
@@ -885,7 +894,7 @@ int main(int argc, char* argv[]) {
 
 							randChar = randNum;
 
-							sprintf(buffer,"AUTH %d\n",randChar);
+							sprintf(buffer,"AUTH %c",randChar);
 
 							nw = write(fd_out,buffer,strlen(buffer));
 
@@ -896,7 +905,7 @@ int main(int argc, char* argv[]) {
 							encrypted = malloc(sizeof(unsigned char));
 							encrypt(encrypted, randChar);
 
-							sscanf(buffer,"AUTH %u",&recvChar);
+							sscanf(buffer,"AUTH %c",&recvChar);
 
 							if(recvChar == *encrypted) {
 								printf(ANSI_COLOR_GREEN "%s -> Authenticated !!" ANSI_COLOR_RESET, name2connect);
