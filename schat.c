@@ -7,6 +7,7 @@
 #include <ctype.h>
 #include <netdb.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -45,6 +46,8 @@ typedef int bool;
 int stateMachine = init;
 
 int surDir_sock;
+
+struct stat st = {0}; /* Sincerely, why do I need this? */
 
 /*
  * Function:  show_usage
@@ -350,9 +353,13 @@ int main(int argc, char* argv[]) {
 	int randNum;
 	int randChar,encrypted,recvChar;
 
-	int yes=1; 
+	int yes=1; /* YESSSS */
 
 	srand(time(NULL)); /* initializing pseudo-random number generator */
+
+	int save_history = 0;
+	FILE* historyfile;
+	char* hfilename = NULL;
 
 	/*Check and retrieve given arguments	*/
 	while((c=getopt(argc,argv,options)) != -1) {
@@ -423,6 +430,15 @@ int main(int argc, char* argv[]) {
 		exit(1);//error
 	}
 
+	/* Creating directory for storing user conversation history */
+	if (stat("./conversations", &st) == -1) {
+    	if(mkdir("./conversations", 0700) == -1) {
+    		printf(ANSI_COLOR_RED "Error creating conversation folder - it will not be possible to store conversation history");
+    		printf(ANSI_COLOR_WHITE "\n");
+    		save_history = 1;
+    	}
+	}
+
 	printf("Let's start..\n");
 
 	while(1){
@@ -439,7 +455,7 @@ int main(int argc, char* argv[]) {
 
  		memset(usrIn, 0, sizeof(usrIn));
 
- 		printf("");
+ 		printf(""); /* WHY? */
 
 		counter=select(maxfd+1,&rfds,(fd_set*)NULL,(fd_set*)NULL,(struct timeval *)NULL);
 
@@ -687,6 +703,18 @@ int main(int argc, char* argv[]) {
 				}else{
 
 					if (stateMachine == onChat_received){
+							
+							hfilename = malloc((22+strlen(friend_name)+strlen(in_name_surname))*sizeof(char)+1);
+							sprintf(hfilename,"./conversations/%s.%s.conv",friend_name,in_name_surname);
+							historyfile = fopen(hfilename,"a");
+							printf("lel\n");
+							if(historyfile != NULL){
+								fprintf(historyfile,"%s: %s\n",friend_name,buffer );
+								fclose(historyfile);
+							}else { 
+								printf(ANSI_COLOR_RED "The following message was not stored");
+								printf(ANSI_COLOR_WHITE "\n");
+							}
 
 							printf(ANSI_COLOR_CYAN "%s: %s" ANSI_COLOR_RESET,friend_name, buffer);
 							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
