@@ -801,6 +801,7 @@ int main(int argc, char* argv[]) {
 
 					}else if (stateMachine == onChat_authenticating_step_2){
 						
+						encrypted = malloc(sizeof(unsigned char));
 						encrypt(encrypted, randChar);
 						if(encrypted == NULL) {
 							printf(ANSI_COLOR_RED "%s -> Not authorized",friend_name);
@@ -827,6 +828,7 @@ int main(int argc, char* argv[]) {
 
 						sscanf(buffer,"AUTH %u",&randChar);
 
+						encrypted = malloc(sizeof(unsigned char));
 						encrypt(encrypted, randChar);
 
 						printf("Received %d | encrypted %u\n", randChar, *encrypted);
@@ -870,6 +872,7 @@ int main(int argc, char* argv[]) {
 
 							sscanf(buffer,"AUTH %u",&randChar);
 
+							encrypted = malloc(sizeof(unsigned char));
 							encrypt(encrypted, randChar);
 
 							printf("Received %d | encrypted %u\n", randChar, *encrypted);
@@ -890,6 +893,7 @@ int main(int argc, char* argv[]) {
 
 						}else if (stateMachine == onChat_authenticating_step_2){
 
+							encrypted = malloc(sizeof(unsigned char));
 							encrypt(encrypted, randChar);
 
 							sscanf(buffer,"AUTH %u",&recvChar);
