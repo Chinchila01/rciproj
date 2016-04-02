@@ -25,9 +25,6 @@
 #define ANSI_COLOR_WHITE   "\x1B[37m"
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
-/* Name of file where hashtable is located */
-#define HASHTABLE "hashtable.txt"
-
 /* Structure where we list valid commands and description, to be used by function help() */
 struct command_d{
 	char* cmd_name;
@@ -48,6 +45,9 @@ const commands[] = {
 
 int ncmd = sizeof(commands)/sizeof(commands[0]); /* Number of commands */
 
+/* Name of file where default hashtable is located */
+#define HASHFILE "hashtable.txt"
+
 #define max(A,B) ((A)>=(B)?(A):(B))
 
 typedef int bool;
@@ -62,6 +62,9 @@ typedef int bool;
 #define onChat_authenticating_step_1 4 
 #define onChat_authenticating_step_2 5
 #define onChat_authenticating_step_3 6
+
+/* Name of file where hashtable is located */
+char * HASHTABLE = "hashtable.txt";
 
 int stateMachine = init;
 
@@ -164,6 +167,8 @@ bool encrypt(unsigned char* encrypted, unsigned char c) {
 		printf(ANSI_COLOR_RED "encrypt: error: %s",strerror(errno));
 		printf(ANSI_COLOR_WHITE "\n");
 		encrypted = NULL;
+		HASHTABLE = malloc(strlen(HASHFILE));
+		strcpy(HASHTABLE,HASHFILE);
 		return false;
 	}
 
@@ -412,12 +417,13 @@ int main(int argc, char* argv[]) {
 	char *in_name_surname = NULL ,*in_ip = NULL ,*in_scport = NULL,*in_snpip = NULL,*in_snpport = NULL;
 	char c;
 	char buffer[512];
+	char cipherFile[512];
 	char * name2connect;
 	char * location;
 
 	int fd = NULL, addrlen, newfd = NULL;
 	struct sockaddr_in addr;
-	int n, nw;
+	int n, nw, ny;
 
 	int fd_out = NULL;
 	struct sockaddr_in addr_out;
@@ -591,68 +597,89 @@ int main(int argc, char* argv[]) {
 
 				memset(buffer, 0, sizeof(buffer));
 
-				sscanf(usrIn,"connect %s", buffer);
+				ny = sscanf(usrIn,"connect %s %s", buffer, cipherFile);
 
-				name2connect = malloc(strlen(buffer));
-				strcpy(name2connect,buffer);
-
-				if (strcmp(name2connect,in_name_surname) == 0){
-					printf("Ahah are you ok? Do you really want to talk to yourself?\n");
+				if (ny > 2){
+					printf ("Too many arguments to the connect function. Type help for instructions.\n");
 				}else{
-					if (strlen(name2connect) <= 1){
-						printf("Argument missing. Who do you want to talk to?\n");
-					}else{
-						location = queryUser(in_snpip, in_snpport, name2connect);
 
-						if (strcmp(location,"") == 0 || location == NULL){
-							printf("Ups.. User not found.\n");
+					if (ny == 2){
+
+						if (strcmp(cipherFile,"") == 0 || cipherFile == NULL){
+							printf("Using default cipher file: hashtable.txt\n");
 						}else{
-							printf("User located at: %s\n", location);
-							
-							printf("Trying to connect..\n");
+							HASHTABLE = malloc(strlen(cipherFile));
+							strcpy(HASHTABLE,cipherFile);
+							printf("Using your cipher file: %s\n", HASHTABLE);
+						}
 
-							strcpy(buffer,location);
+						
+					}else if (ny == 1){
+						printf("Using default cipher file: hashtable.txt\n");
+					}
 
-							sscanf(buffer,"%[^';'];%s",remote_ip, remote_port);
+					name2connect = malloc(strlen(buffer));
+					strcpy(name2connect,buffer);
 
-							fd_out=socket(AF_INET,SOCK_STREAM,0); /* TCP socket */
+					if (strcmp(name2connect,in_name_surname) == 0){
+						printf("Ahah are you ok? Do you really want to talk to yourself?\n");
+					}else{
+						if (strlen(name2connect) <= 1){
+							printf("Argument missing. Who do you want to talk to?\n");
+						}else{
+							location = queryUser(in_snpip, in_snpport, name2connect);
 
-							if(fd_out==-1){
-								printf("FAIL\n");
-								return -1;
-							}
+							if (strcmp(location,"") == 0 || location == NULL){
+								printf("Ups.. User not found.\n");
 
-							inet_pton(AF_INET, remote_ip, &temp);
-							h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
-							a=(struct in_addr*)h->h_addr_list[0];
+							}else{
+								printf("User located at: %s\n", location);
+								
+								printf("Trying to connect..\n");
 
-							memset((void*)&addr_out,(int)'\0',sizeof(addr_out));
+								strcpy(buffer,location);
 
-							addr_out.sin_family=AF_INET;
-							addr_out.sin_addr=*a;
-							addr_out.sin_port=htons(atoi(remote_port));
+								sscanf(buffer,"%[^';'];%s",remote_ip, remote_port);
 
-							n=connect(fd_out,(struct sockaddr*)&addr_out,sizeof(addr_out));
+								fd_out=socket(AF_INET,SOCK_STREAM,0); /* TCP socket */
 
-							if (n == -1){
-								printf("ERROR connecting\n");
-								return -1;
-							}
+								if(fd_out==-1){
+									printf("FAIL\n");
+									return -1;
+								}
 
-							sprintf(buffer,"NAME %s",in_name_surname);
+								inet_pton(AF_INET, remote_ip, &temp);
+								h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
+								a=(struct in_addr*)h->h_addr_list[0];
 
-							nw = write(fd_out,buffer,strlen(buffer));
+								memset((void*)&addr_out,(int)'\0',sizeof(addr_out));
 
-							if (nw <= 1){
-								printf("Could not send message.\n");
-							}
+								addr_out.sin_family=AF_INET;
+								addr_out.sin_addr=*a;
+								addr_out.sin_port=htons(atoi(remote_port));
 
-							printf(ANSI_COLOR_GREEN "\nConnected with %s !!\n" ANSI_COLOR_RESET, name2connect);
-							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
+								n=connect(fd_out,(struct sockaddr*)&addr_out,sizeof(addr_out));
 
-							stateMachine = onChat_authenticating_step_1; /* onChat_sent */ 
-						}	
-					}				
+								if (n == -1){
+									printf("ERROR connecting\n");
+									return -1;
+								}
+
+								sprintf(buffer,"NAME %s",in_name_surname);
+
+								nw = write(fd_out,buffer,strlen(buffer));
+
+								if (nw <= 1){
+									printf("Could not send message.\n");
+								}
+
+								printf(ANSI_COLOR_GREEN "\nConnected with %s !!\n" ANSI_COLOR_RESET, name2connect);
+								printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
+
+								stateMachine = onChat_authenticating_step_1; /* onChat_sent */ 
+							}	
+						}				
+					}
 				}
 
 			}else if(strstr(usrIn,"message") != NULL && (stateMachine == onChat_sent || stateMachine == onChat_received) && stateMachine != init){
@@ -833,6 +860,8 @@ int main(int argc, char* argv[]) {
 							printf(ANSI_COLOR_RED "%s -> Not authorized." ANSI_COLOR_RESET, friend_name);
 							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 
+							shutdown(newfd, SHUT_RDWR);
+
 							stateMachine = registered;
 						}
 
@@ -918,6 +947,8 @@ int main(int argc, char* argv[]) {
 							}else{
 								printf(ANSI_COLOR_RED "%s -> Not authorized." ANSI_COLOR_RESET, name2connect);
 								printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
+
+								shutdown(fd_out, SHUT_RDWR);
 
 								stateMachine = registered;
 							}
