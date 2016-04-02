@@ -172,14 +172,10 @@ bool encrypt(unsigned char* encrypted, unsigned char c) {
 		return false;
 	}
 
-	printf("ESTE É O C: %u\n",c);
-
 	for(i = 0;i < c+1 ; i++){
 		fgets(buffer,512,table);
 	}
 
-	printf("ESTE É O i: %d\n",i);
-printf("ESTE É O buff: %s\n",buffer);
 	if(sscanf(buffer,"%u",encrypted) != 1) {
 		printf(ANSI_COLOR_RED "encrypt: error parsing file");
 		printf(ANSI_COLOR_WHITE "\n");
@@ -188,8 +184,6 @@ printf("ESTE É O buff: %s\n",buffer);
 	}
 		
 	fclose(table);
-
-	printf("\nENCRYPT: in - %u | out - %u\n\n",c,*encrypted);
 
 	return true;
 }
@@ -810,6 +804,7 @@ int main(int argc, char* argv[]) {
 					printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 				 	close(newfd);
 				 	newfd = NULL;
+				 	stateMachine = registered;
 				}else{
 
 					if (stateMachine == onChat_received){
@@ -830,7 +825,6 @@ int main(int argc, char* argv[]) {
 						randChar = randNum;
 
 						sprintf(buffer,"AUTH %c",(unsigned char)randChar);
-						printf("buffer: %s\n",buffer);
 
 						nw = write(newfd,buffer,strlen(buffer));
 
@@ -840,7 +834,7 @@ int main(int argc, char* argv[]) {
 						
 						encrypted = malloc(sizeof(unsigned char));
 						encrypt(encrypted, randChar);
-						printf("after encrypt: %c\n",*encrypted);
+
 						if(encrypted == NULL) {
 							printf(ANSI_COLOR_RED "%s -> Not authorized",friend_name);
 							printf(ANSI_COLOR_WHITE "\n");
@@ -849,11 +843,10 @@ int main(int argc, char* argv[]) {
 						}
 
 						sscanf(buffer,"AUTH %c",&recvChar);
-						printf("Recv Char : u: %u, c: %c", recvChar, recvChar);
+						
 						if(recvChar == *encrypted) {
 							printf(ANSI_COLOR_GREEN "%s -> Authenticated !!" ANSI_COLOR_RESET, friend_name);
 							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
-							printf("recvChar not the same - %u - %u\n",recvChar,*encrypted);
 
 							stateMachine = onChat_authenticating_step_3;
 						}else{
@@ -871,8 +864,6 @@ int main(int argc, char* argv[]) {
 
 						encrypted = malloc(sizeof(unsigned char));
 						encrypt(encrypted, randChar);
-
-						printf("Received %d | encrypted %u\n", randChar, *encrypted);
 
 						sprintf(buffer,"AUTH %c",*encrypted);
 							
@@ -901,6 +892,7 @@ int main(int argc, char* argv[]) {
 						printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 					 	close(fd_out);
 					 	fd_out = NULL;
+					 	stateMachine = registered;
 					}else{
 						if (stateMachine == onChat_sent){
 							
@@ -915,8 +907,6 @@ int main(int argc, char* argv[]) {
 
 							encrypted = malloc(sizeof(unsigned char));
 							encrypt(encrypted, randChar);
-
-							printf("Received %d | encrypted %u\n", randChar, *encrypted);
 
 							sprintf(buffer,"AUTH %c",*encrypted);
 							
