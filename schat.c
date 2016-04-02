@@ -372,12 +372,12 @@ char * queryUser(char * snpip, char * port, char * user){
 
 	if (answer == NULL){
 		printf("UDP error: empty message received\n");
-		return NULL;
+		return "";
 	}
 
 	if(strstr(answer,"NOK") != NULL) {
 		printf("Error: %s\n",answer);
-		return NULL;
+		return "";
 	}
 
 	memset(buffer, 0, sizeof(buffer));
@@ -580,14 +580,14 @@ int main(int argc, char* argv[]) {
 				}else{
 					location = queryUser(in_snpip, in_snpport, name2connect);
 
-					if (location == NULL){
+					if (strcmp(location,"") == 0 || location == NULL){
 						printf("Ups.. User not found.\n");
 					}else{
 						printf("User located at: %s\n", location);
 					}
 				}
 
-			}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0 && stateMachine != init){
+			}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0 && stateMachine == registered){
 
 				memset(buffer, 0, sizeof(buffer));
 
@@ -604,7 +604,7 @@ int main(int argc, char* argv[]) {
 					}else{
 						location = queryUser(in_snpip, in_snpport, name2connect);
 
-						if (strcmp(location,"") == 0){
+						if (strcmp(location,"") == 0 || location == NULL){
 							printf("Ups.. User not found.\n");
 						}else{
 							printf("User located at: %s\n", location);
@@ -722,8 +722,11 @@ int main(int argc, char* argv[]) {
 				}else if(strstr(usrIn,"find") != NULL){
 					printf("You have to be part of the network to find someone.\nPlease join, you are welcome.\n");
 				
-				}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0){
+				}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0 && stateMachine == init){
 					printf("You have to be part of the network to connect with someone.\nPlease join, you are welcome.\n");
+
+				}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0 && stateMachine != init){
+					printf("You cannot begin a new connection while chatting with someone. Please end the conversation.\n");
 
 				}else if(strstr(usrIn,"message") != NULL){
 					if (stateMachine != onChat_sent && stateMachine != onChat_received  && stateMachine != init){
