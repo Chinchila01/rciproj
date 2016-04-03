@@ -416,6 +416,7 @@ int main(int argc, char* argv[]) {
 	char * location;
 
 	int fd = NULL, addrlen, newfd = NULL;
+	int refuse_fd = NULL;
 	struct sockaddr_in addr;
 	int n, nw, ny;
 
@@ -775,15 +776,32 @@ int main(int argc, char* argv[]) {
 
 			addrlen=sizeof(addr);
 
-			if((newfd=accept(fd,(struct sockaddr*)&addr,(socklen_t*)&addrlen))==-1){
-				printf("ERROR: Cannot start listening TCP.\n");
-				exit(1); 
+			if (stateMachine == registered){
+
+				if((newfd=accept(fd,(struct sockaddr*)&addr,(socklen_t*)&addrlen))==-1){
+					printf("ERROR: Cannot start listening TCP.\n");
+					exit(1); 
+				}
+
+				printf(ANSI_COLOR_GREEN "\nReceived incoming connection !!\n" ANSI_COLOR_RESET);
+				printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
+
+				stateMachine = onChat_authenticating_step_1;
+			}else{
+
+				if((refuse_fd=accept(fd,(struct sockaddr*)&addr,(socklen_t*)&addrlen))==-1){
+					printf("ERROR: Cannot refuse TCP.\n");
+					exit(1); 
+				}
+
+				sprintf(buffer,"Busy line. Connection Refused");
+
+				nw = write(refuse_fd,buffer,strlen(buffer));
+
+				shutdown(refuse_fd, SHUT_RDWR);
+
+				printf("Refused incoming connection because you are chatting with someone.\n");
 			}
-
-			printf(ANSI_COLOR_GREEN "\nReceived incoming connection !!\n" ANSI_COLOR_RESET);
-			printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
-
-			stateMachine = onChat_authenticating_step_1;
 
 		}
 
@@ -903,24 +921,31 @@ int main(int argc, char* argv[]) {
 										
 						}else if (stateMachine == onChat_authenticating_step_1){
 
-							sscanf(buffer,"AUTH %c",&randChar);
+							ny = sscanf(buffer,"AUTH %c",&randChar);
 
-							encrypted = malloc(sizeof(unsigned char));
-							encrypt(encrypted, randChar);
+							if (ny != 1){
+								printf("Out of Protocol: %s\n", buffer);
 
-							sprintf(buffer,"AUTH %c",*encrypted);
-							
-							nw = write(fd_out,buffer,strlen(buffer));
+								stateMachine = registered;
 
-							randNum = (rand() % 256) + 0;
+							}else{
+								encrypted = malloc(sizeof(unsigned char));
+								encrypt(encrypted, randChar);
 
-							randChar = randNum;
+								sprintf(buffer,"AUTH %c",*encrypted);
+								
+								nw = write(fd_out,buffer,strlen(buffer));
 
-							sprintf(buffer,"AUTH %c",randChar);
+								randNum = (rand() % 256) + 0;
 
-							nw = write(fd_out,buffer,strlen(buffer));
+								randChar = randNum;
 
-							stateMachine = onChat_authenticating_step_2;
+								sprintf(buffer,"AUTH %c",randChar);
+
+								nw = write(fd_out,buffer,strlen(buffer));
+
+								stateMachine = onChat_authenticating_step_2;
+							}
 
 						}else if (stateMachine == onChat_authenticating_step_2){
 
