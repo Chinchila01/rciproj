@@ -15,413 +15,42 @@
 #include <errno.h>
 #include <time.h>
 #include <signal.h>
+#include "helper.h"
+#include "communications.h"
+
+/* Program States */
+
+#define init 0 /* initial state, not registered on network. No network actions allowed */
+#define registered 1 /* after join, can leave, find users and connect */
+#define onChat_received 2 /* state for incoming connection */
+#define onChat_sent 3 /* state for outgoing connection */
+/* authentication steps for sequential message exchange */
+#define onChat_authenticating_step_1 4
+#define onChat_authenticating_step_2 5
+#define onChat_authenticating_step_3 6
+
+#define max(A,B) ((A)>=(B)?(A):(B)) // returns max value between A and B
 
 typedef void (*sighandler_t)(int);
 sighandler_t signal(int signum, sighandler_t handler);
 
-/* Terminal colors definition */
-#define ANSI_COLOR_RED     "\x1b[31m"
-#define ANSI_COLOR_GREEN   "\x1b[32m"
-#define ANSI_COLOR_YELLOW  "\x1b[33m"
-#define ANSI_COLOR_BLUE    "\x1b[34m"
-#define ANSI_COLOR_MAGENTA "\x1b[35m"
-#define ANSI_COLOR_CYAN    "\x1b[36m"
-#define ANSI_COLOR_WHITE   "\x1B[37m"
-#define ANSI_COLOR_RESET   "\x1b[0m"
-
-/* Structure where we list valid commands and description, to be used by function help() */
-struct command_d{
-	char* cmd_name;
-	char* cmd_help;
-}
-
-//nao esquecer find
-const commands[] = {
+struct command_d commands[] = {
 	{"join", "Joins the proper name server "},
 	{"leave", "Unregister and leave the proper name server"},
 	{"connect", "Connect to a peer"},
 	{"disconnect", "Disconnect from a peer"},
 	{"message", "Used to send a message to a connected peer"},
-	{"history","Shows old connections, enables quick reconnection and prints conversation history"},
+	{"find", "Used to find the location a user"},
 	{"exit","Exits the program cleanly"},
 	{"help","Prints a rudimentary help"}
 };
 
 int ncmd = sizeof(commands)/sizeof(commands[0]); /* Number of commands */
 
-/* Name of file where default hashtable is located */
-#define HASHFILE "hashtable.txt"
-
-#define max(A,B) ((A)>=(B)?(A):(B)) // returns max value between A and B
-
-// define boolean variable types
-typedef int bool;
-#define true 1
-#define false 0
-
-/* Program States */
-
-#define init 0 // initial state, not registered on network. No network actions allowed
-#define registered 1 // after join, can leave, find users and connect
-#define onChat_received 2 // state for incoming connection
-#define onChat_sent 3 // state for outgoing connection
-// authentication steps for sequential message exchange
-#define onChat_authenticating_step_1 4
-#define onChat_authenticating_step_2 5
-#define onChat_authenticating_step_3 6
-
 /* Name of file where hashtable is located, can be updated during execution */
-char * HASHTABLE = "hashtable.txt";
+char * HASHTABLE = "hashtable.txt"; /* ------------ WHY, temos um hashtable e um hashfile, nao vale a pena inicializar -------------------------- */
 
-int stateMachine = init; // define initial state
-
-struct stat st = {0}; /* Sincerely, why do I need this? */
-
-/* Function: help
-*  -------------------
-*  Displays a list of all commands available and a description
-* 
-*  returns: 0
-*/
-int help() {
-	int i;
-
-	printf(ANSI_COLOR_BLUE "HELP - Here are the commands available:\n");
-	printf(ANSI_COLOR_BLUE "//------------------------------------------------\\\\");
-	printf(ANSI_COLOR_WHITE "\n");
-
-	for(i = 0; i < ncmd; i++) {
-		printf("\t %s - %s\n",commands[i].cmd_name,commands[i].cmd_help);
-	}
-	printf(ANSI_COLOR_BLUE "\\\\------------------------------------------------//");
-	printf(ANSI_COLOR_WHITE "\n");
-	return 0;
-}
-
-char* get_time(){
-	time_t timer;
-	char buffer[26];
-	char* timestring;
-	struct tm* tm_info;
-
-	time(&timer);
-	tm_info = localtime(&timer);
-
-	strftime(buffer, 26, "%Y:%m:%d %H:%M:%S", tm_info);
-
-	timestring = malloc(26*sizeof(char) + 1);
-	sprintf(timestring,"%s",buffer);
-
-	return timestring;
-}
-
-int print2history(char* msg, char* friend_name, char* full_name, int sent){
-	FILE* historyfile = NULL;
-	char* hfilename;
-	char buffer[512];
-
-	hfilename = malloc((22+strlen(friend_name)+strlen(full_name))*sizeof(char)+1);
-	sprintf(hfilename,"./conversations/%s.%s.conv",friend_name,full_name);
-	historyfile = fopen(hfilename,"a");
-	
-	if(historyfile != NULL){
-		if(sent == 0) {
-			fprintf(historyfile,"<%s>%s: %s\n",get_time(),friend_name,msg);
-			sprintf(buffer,"<%s>%s: %s\n",get_time(),friend_name,msg);
-		}else{
-			fprintf(historyfile,"<%s>%s: %s\n",get_time(),full_name,msg);
-			sprintf(buffer,"<%s>%s: %s\n",get_time(),full_name,msg);
-		}
-		fclose(historyfile);
-		printf("print2history: printed %s to file %s\n",buffer,hfilename);
-		return 0;
-	}else { 
-		printf(ANSI_COLOR_RED "The following message was not stored");
-		printf(ANSI_COLOR_WHITE "\n");
-		return -1;
-	}
-}
-
-/*
- * Function:  show_usage
- * --------------------
- * Show the correct usage of the program command
- *
- *  returns:  -1 always (when this runs, it means something about the user's entered arguments went wrong)
- */
-int show_usage(){
-	printf("Usage: schat –n name.surname –i ip -p scport -s snpip -q snpport\n");
-	return -1;
-}
-
-/* Function: encrypt
- * --------------------
- * Encrypt byte according to table on hashTable
- *
- * Parameters: int c -> byte to encrypt
- *
- * returns: encrypted byte if successful
- *          empty char if error ocurred
- */
-bool encrypt(unsigned char* encrypted, unsigned char c) {
-	FILE *table;
-	char buffer[512];
-	int i;
-
-	table = fopen(HASHTABLE,"r"); // open key file
-
-	// show error message if cannot open
-	if(table == NULL) {
-		printf(ANSI_COLOR_RED "encrypt: error: %s",strerror(errno));
-		printf(ANSI_COLOR_WHITE "\n");
-		encrypted = NULL;
-
-		// set key file to default
-		HASHTABLE = malloc(strlen(HASHFILE));
-		strcpy(HASHTABLE,HASHFILE);
-		return false;
-	}
-
-	// read file until c line
-	for(i = 0;i < c+1 ; i++){
-		fgets(buffer,512,table);
-	}
-
-	// get encrypted char, store it on memory and deliver error if file bad formated
-	if(sscanf(buffer,"%u",encrypted) != 1) {
-		printf(ANSI_COLOR_RED "encrypt: error parsing file");
-		printf(ANSI_COLOR_WHITE "\n");
-		encrypted = NULL;
-		return false;
-	}
-		
-	fclose(table); // close file
-
-	return true;
-}
-
-/* Function: comUDP
-*  -------------------
-*  Sends a UDP message and waits for an answer
-* 
-*  Parameters: char* msg      -> message to be sent
-*  			   char* dst_ip   -> ip of the destination of the message
-*              char* dst_port -> port of the destination of the message
-*
-*  returns: Reply in char* format
-*           NULL if error ocurred
-*/
-char * comUDP(char * msg, char * dst_ip, char * dst_port){
-	struct sockaddr_in addr;
-	struct in_addr *a;
-	int n, addrlen;
-	struct in_addr temp;
-	struct hostent* h;
-	char buffer[512];
-	char * answer;
-	struct timeval tv;
-	int surDir_sock;
-
-	/* Open UDP socket for our server */
-	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
-		printf("UDP error: %s\n",strerror(errno));
-		return NULL;
-	}	
-	
-	// get host info
-	inet_pton(AF_INET, dst_ip, &temp);
-	if((h=gethostbyaddr(&temp,sizeof(temp),AF_INET)) == NULL) {
-		printf("UDP error: sending getting host information\n");
-		close(surDir_sock);
-		return NULL;
-	}
-
-	a=(struct in_addr*)h->h_addr_list[0];
-
-	// set remote host address and port for connection
-	memset((void*)&addr,(int)'\0',sizeof(addr));
-	addr.sin_family=AF_INET;
-	addr.sin_addr=*a;
-	addr.sin_port=htons(atoi(dst_port));
-
-	printf("UDP Sending: %s\n", msg);
-
-	// all set up, send message
-	n=sendto(surDir_sock,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
-
-	// check for errors on message send
-	if(n==-1) {
-		printf("UDP error: sending message to the server\n");
-		close(surDir_sock);
-		return NULL;
-	}
-
-	/* Setting UDP message timeout */
-	tv.tv_sec = 5;
-	tv.tv_usec = 0;
-
-	if (setsockopt(surDir_sock, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
-    	perror("Error");
-	}
-
-	// get incoming message response
-	addrlen = sizeof(addr);
-	n=recvfrom(surDir_sock,buffer,512,0,(struct sockaddr*)&addr,(socklen_t*)&addrlen);
-
-	// check for errors on message receive
-	if(n==-1) {
-		printf("UDP error: receiving message to the server\n");
-		close(surDir_sock);
-		return NULL;
-	}
-
-
-	answer=malloc(n); // alocate answer according to received bytes
-	sprintf(answer,"%.*s",n,buffer);
-
-	printf("Raw answer: %s\n",answer);
-
-	close(surDir_sock); // close udp socket
-
-	return answer;
-}
-
-/* Function: usrRegister
-*  -------------------
-*  Registers a user
-* 
-*  Parameters: char* snpip    -> pointer to string with proper name server's ip address in format xxx.xxx.xxx.xxx
-*  			   char* port     -> pointer to a string with proper name server's port number
-*              char* fullname -> pointer to a string with full name of user in format name.surname
-*			   char* my_ip    -> pointer to a string with user ip address in format xxx.xxx.xxx.xxx
-*              char* my_port  -> pointer to a string with user port number
-*
-*  returns: true if registration was successful
-*           false if error ocurred
-*/
-bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char * my_port){
-	char * msg;
-	char buffer[512];
-	char * answer;
-
-	// format user register message
-	sprintf(buffer,"REG %s;%s;%s",full_name,my_ip,my_port);
-
-	msg = malloc(strlen(buffer));
-	msg = buffer;
-
-	// send message through comUDP function
-	answer = comUDP(msg, snpip, port);
-
-	// check for error
-	if (answer == NULL){
-		printf("UDP error: empty message received\n");
-		return false;
-	}
-
-	// check for ack or error message
-	if(strcmp(answer,"OK") != 0) {
-		printf("Error: %s\n",answer);
-		free(answer);
-		return false;
-	}
-
-	printf("User registration successful!\n");
-	free(answer);
-	return true;
-}
-
-/* Function: usrExit
-*  -------------------
-*  Unregisters the user from the proper name server
-* 
-*  Parameters: char* snpip    -> pointer to string with proper name server's ip address in format xxx.xxx.xxx.xxx
-*  			   char* port     -> pointer to a string with proper name server's port number
-*              char* fullname -> pointer to a string with full name of user in format name.surname
-*
-*  returns: true if unregistration was successful
-*           false if error ocurred
-*/
-bool usrExit(char * snpip, char * port, char * full_name){
-	char buffer[512];
-	char *answer;
-	char * msg;
-
-	// format user unregister message
-	sprintf(buffer,"UNR %s",full_name);
-
-	msg = malloc(strlen(buffer));
-	msg = buffer;
-
-	// send message through comUDP function
-	answer = comUDP(msg, snpip, port);
-
-	// check for error
-	if (answer == NULL){
-		printf("UDP error: empty message received\n");
-		return false;
-	}
-
-	// check for ack or error message
-	if(strcmp(answer,"OK") != 0) {
-		printf("Error: %s\n",answer);
-		return false;
-	}
-
-	printf("User unregistered successful!\n");
-
-	return true;
-}
-
-/* Function: queryUser
-*  -------------------
-*  Queries proper name server about the location of a certain user
-* 
-*  Parameters: char* snpip -> pointer to string with proper name server's ip address in format xxx.xxx.xxx.xxx
-*  			   char* port  -> pointer to a string with proper name server's port number
-*              char* user  -> pointer to a string with user's name to query about in format name.fullname
-*
-*  returns: string with user's location if query was successful
-*           NULL if user was not found or an error ocurred
-*/
-char * queryUser(char * snpip, char * port, char * user){
-	char buffer[512], garb_0[512];
-	char *answer;
-	char * msg;
-	char * location;
-
-	// format user query message
-	sprintf(buffer,"QRY %s",user);
-
-	msg = malloc(strlen(buffer));
-	msg = buffer;
-
-	// send message through comUDP function
-	answer = comUDP(msg, snpip, port);
-
-	// check for error
-	if (answer == NULL || strcmp(answer,"") == 0){
-		printf("UDP error: empty message received\n");
-		return "";
-	}
-
-	// check for query problems (ex: user not found)
-	if(strstr(answer,"NOK") != NULL) {
-		printf("Error: %s\n",answer);
-		return "";
-	}
-
-	memset(buffer, 0, sizeof(buffer));
-
-	// process information and store address data on buffer
-	sscanf(answer,"RPL %[^';'];%s", garb_0, buffer);
-
-	location = malloc(strlen(buffer));
-
-	strcpy(location, buffer);
-
-	return location;
-}
+int stateMachine = init; /* define initial state */
 
 /*
  * Function:  main
@@ -472,8 +101,6 @@ int main(int argc, char* argv[]) {
 
 	int yes=1; /* YESSSS */
 
-	int save_history = 0;
-
 	void (*old_handler)(int); //interrupt handler
 
 	srand(time(NULL)); /* initializing pseudo-random number generator */
@@ -509,14 +136,14 @@ int main(int argc, char* argv[]) {
 			}
 			return -1;
 		     default:
-			show_usage();
+			show_usage(0);
 			return -1;
 		}
 	}
 
 	/* Check if required arguments are given   */
 	if(in_name_surname == NULL || in_snpip == NULL || in_snpport == NULL || in_scport == NULL || in_ip == NULL) {
-		show_usage();
+		show_usage(0);
 		return -1;
 	}
 
@@ -552,17 +179,6 @@ int main(int argc, char* argv[]) {
 		printf("ERRO\n");
 		exit(1);
 	}
-
-	/* Creating directory for storing user conversation history */
-	if (stat("./conversations", &st) == -1) {
-    	if(mkdir("./conversations", 0700) == -1) {
-    		printf(ANSI_COLOR_RED "Error creating conversation folder - it will not be possible to store conversation history");
-    		printf(ANSI_COLOR_WHITE "\n");
-    		save_history = 1;
-    	}
-	}
-
-	save_history = 1;
 
 	// From now on, the SIGPIPE signal will be ignored
 	if((old_handler=signal(SIGPIPE,SIG_IGN))==SIG_ERR)exit(1); //error
@@ -650,7 +266,7 @@ int main(int argc, char* argv[]) {
 						printf("User located at: %s\n", location);
 					}
 
-					memset(location, 0, sizeof(location)); // clean buffer
+					memset(location, 0, strlen(location)*sizeof(char)); // clean buffer
 				}
 
 			}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0 && stateMachine == registered){
@@ -699,7 +315,7 @@ int main(int argc, char* argv[]) {
 
 								strcpy(buffer,location);
 
-								memset(location, 0, sizeof(location));
+								memset(location, 0, strlen(location)*sizeof(char));
 
 								sscanf(buffer,"%[^';'];%s",remote_ip, remote_port);
 
@@ -858,7 +474,7 @@ int main(int argc, char* argv[]) {
 						printf("You have to be part of the network and messaging with someone to end the conversation.\nPlease join, you are welcome.\n");
 					}
 				}else if(strcmp(usrIn,"help\n") == 0){
-					help();
+					help(commands,ncmd);
 				}else{
 					printf("You are not allowed to do that my friend.\n");
 				}
@@ -925,10 +541,8 @@ int main(int argc, char* argv[]) {
 
 					if (stateMachine == onChat_received){
 
-							if(save_history) print2history(buffer,friend_name,in_name_surname,0);
-
-							printf(ANSI_COLOR_CYAN "%s: %s" ANSI_COLOR_RESET,friend_name, buffer);
-							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
+						printf(ANSI_COLOR_CYAN "%s: %s" ANSI_COLOR_RESET,friend_name, buffer);
+						printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 					
 					}else if(stateMachine == onChat_authenticating_step_1){
 						
@@ -949,7 +563,7 @@ int main(int argc, char* argv[]) {
 					}else if (stateMachine == onChat_authenticating_step_2){
 						
 						encrypted = malloc(sizeof(unsigned char));
-						encrypt(encrypted, randChar);
+						encrypt(encrypted, randChar, HASHTABLE);
 
 						if(encrypted == NULL) {
 							printf(ANSI_COLOR_RED "%s -> Not authorized",friend_name);
@@ -979,7 +593,7 @@ int main(int argc, char* argv[]) {
 						sscanf(buffer,"AUTH %c",&randChar);
 
 						encrypted = malloc(sizeof(unsigned char));
-						encrypt(encrypted, randChar);
+						encrypt(encrypted, randChar, HASHTABLE);
 
 						sprintf(buffer,"AUTH %c",*encrypted);
 							
@@ -1010,8 +624,6 @@ int main(int argc, char* argv[]) {
 					 	stateMachine = registered;
 					}else{
 						if (stateMachine == onChat_sent){
-							
-							if(save_history) print2history(buffer,friend_name,in_name_surname,0);
 
 							printf(ANSI_COLOR_CYAN "%s: %s" ANSI_COLOR_RESET, name2connect, buffer);
 							printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
@@ -1028,7 +640,7 @@ int main(int argc, char* argv[]) {
 							}else{
 								encrypted = malloc(sizeof(unsigned char));
 
-								encrypt(encrypted, randChar);
+								encrypt(encrypted, randChar,HASHTABLE);
 
 								sprintf(buffer,"AUTH %c",*encrypted);
 								
@@ -1048,7 +660,7 @@ int main(int argc, char* argv[]) {
 						}else if (stateMachine == onChat_authenticating_step_2){
 
 							encrypted = malloc(sizeof(unsigned char));
-							encrypt(encrypted, randChar);
+							encrypt(encrypted, randChar, HASHTABLE);
 
 							sscanf(buffer,"AUTH %c",&recvChar);
 
