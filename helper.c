@@ -29,7 +29,7 @@ int help(struct command_d commands[], int ncmd) {
  *  returns:  -1 always (when this runs, it means something about the user's entered arguments went wrong)
  */
 int show_usage(int n){
-	if(n) printf("Usage: schat –n name.surname –i ip -p scport -s snpip -q snpport\n");
+	if(!n) printf("Usage: schat –n name.surname –i ip -p scport -s snpip -q snpport\n");
 	else printf("Usage: snp -n surname -s snpip -q snpport [-i saip] [-p saport]\n");
 	return -1;
 }

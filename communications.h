@@ -165,6 +165,6 @@ char* qry_namesrv(char* snpip, char* snpport, char* firstname, char* surname);
 *  returns: string with info of user if successful
 *           string with NOK if unsuccessful
 */
-char* find_user(char* buffer,int n,char* saip, char* saport, char* serverfile, char* servername)
+char* find_user(char* buffer,int n,char* saip, char* saport, char* serverfile, char* servername);
 
 #endif
