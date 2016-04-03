@@ -26,125 +26,6 @@ int ncmd = sizeof(commands)/sizeof(commands[0]); /* Number of commands */
 char* servername; /* Surname served by this server */
 char* serverfile; /* file name of the server, used to store the registered clients' list */
 
-
-
-/* Function: qry_namesrv
-*  -------------------
-*  Function to query the proper name server
-*
-*  Parameters: char* snpip -> pointer to a string with proper name server ip address in format xxx.xxx.xxx.xxx
-*  			   char* snpport-> pointer to a string with proper name server port number
-*			   char* firstname -> pointer to a string with firstname to query address
-*  			   char* surname -> pointer to a string with surname to query address
-*
-*  returns: string w/ reply from proper name server in the format surname;snpip;snpport
-*           empty string if not successfull
-*/
-char* qry_namesrv(char* snpip, char* snpport, char* firstname, char* surname) {
-	int msglen;
-	char *msg, *answer;
-
-	/* Preparing msg */
-	msglen = strlen("QRY ") + strlen(firstname) + strlen(".") + strlen(surname);
-	msg = malloc(msglen*sizeof(char)+1);
-
-	if(sprintf(msg,"QRY %s.%s",firstname,surname) != (msglen)){
-		printf(ANSI_COLOR_RED "qry_namesrv: error printing message" ANSI_COLOR_RESET);
-		printf(ANSI_COLOR_WHITE "\n");
-		free(msg);
-		return "";
-	}
-
-	printf("MSG: %s TO IP: %s TO PORT: %s\n",msg,snpip,snpport);
-	/* Sending message */
-	answer = comUDP(msg,snpip,snpport);
-
-	if(answer == NULL) {
-		printf(ANSI_COLOR_RED "qry_namesrv: error contacting propername server. Are you sure the address is right?");
-		printf(ANSI_COLOR_WHITE "\n");
-		return "";
-	}
-
-	printf(ANSI_COLOR_GREEN "qry_namesrv: Successful!" ANSI_COLOR_RESET);
-	printf(ANSI_COLOR_WHITE "\n");
-	return answer;
-}
-
-/* Function: find_user
-*  -----------------------
-*  Uses qry_aserv or qry_namesrv if needed to find the location of a user
-*
-*  Parameters: char* buffer -> pointer to a string with query in format QRY name.surname
-*                int n      -> integer with number of bytes received
-*              char* saip   -> pointer to a string with surname server's ip address in format xxx.xxx.xxx.xxx
-*			   char* saport -> pointer to a string with surname server's port number
-*
-*  returns: string with info of user if successful
-*           string with NOK if unsuccessful
-*/
-char* find_user(char* buffer,int n,char* saip, char* saport) {
-	FILE *ufile;
-	int found = 0;
-	char name[128],surname[128];
-	char tempname[128],tempip[128],tempport[128];
-	char snpip[128],snpport[128];
-	char buff2[512],temp[512];
-	char* reply;
-
-	sprintf(buff2,"%s\n",buffer);
-	buff2[n] = '\0';
-
-	/* Checking buffer format */
-	if(sscanf(buff2,"QRY %[^'.'].%s",name,surname) != 2){
-		return "NOK - Query badly formatted";
-	}
-
-	printf("find_user: searching for %s.%s\n",name,surname);
-
-	if(strcmp(surname,servername) == 0) {
-		/* Search on our file */
-		ufile = fopen(serverfile,"r");
-		if(ufile == NULL) return "NOK - client list unreachable";
-		while(fgets(temp,512,ufile) != NULL){
-			if(sscanf(temp,"%[^';'];%[^';'];%s",tempname,tempip,tempport) != 3) {
-				printf(ANSI_COLOR_RED "find_user: Error parsing file contents" ANSI_COLOR_RESET);
-				printf(ANSI_COLOR_WHITE "\n");
-				fclose(ufile);
-				return "NOK - Error with local file";
-			}
-			if((strstr(temp,"#") == NULL) && (strcmp(tempname,name) == 0)) {
-				printf(ANSI_COLOR_GREEN "find_user: found" ANSI_COLOR_RESET);
-				printf(ANSI_COLOR_WHITE "\n");
-				found = 1;
-				break;
-			}
-		}
-		if(found != 1) {
-			printf(ANSI_COLOR_RED "find_user: User not found" ANSI_COLOR_RESET);
-			printf(ANSI_COLOR_WHITE "\n");
-			return "NOK - User not found";
-		}
-		reply = malloc((7+strlen(name)+strlen(surname)+strlen(tempip)+strlen(tempport))*sizeof(char)+1);
-		sprintf(reply,"RPL %s.%s;%s;%s",name,surname,tempip,tempport);
-		fclose(ufile);
-	}
-	else {
-		/* Query surname server */
-		reply = qry_asrv(saip, saport, surname);
-		if(strcmp(reply,"") == 0) printf(ANSI_COLOR_RED "find_user: not found" ANSI_COLOR_RESET);
-		if(sscanf(reply,"SRPL %[^';'];%[^';'];%s",surname,snpip,snpport) != 3) return "NOK - Reply not parseable";
-
-		/* Query np server */	
-		reply = qry_namesrv(snpip, snpport, name, surname);
-		if(strcmp(reply,"") == 0) {
-			printf(ANSI_COLOR_RED "find_user: not found" ANSI_COLOR_RESET);
-			printf(ANSI_COLOR_WHITE "\n");
-		}
-		/* return the reply*/
-		printf("find_user: reply: %s\n",reply);
-	}
-	return reply;
-}
 /*
  * Function:  main
  * --------------------
@@ -370,7 +251,7 @@ int main(int argc, char* argv[]) {
 					printf(ANSI_COLOR_WHITE "\n");
 				}
 			}else if(strcmp(answer,"QRY")==0){
-				reply = find_user(buffer,nread,saip,saport);
+				reply = find_user(buffer,nread,saip,saport, servername, serverfile);
 				if(sendto(fd,reply,strlen(reply),0,(struct sockaddr*)&addr,addrlen) == -1){
 					printf(ANSI_COLOR_RED "Error replying to user" ANSI_COLOR_RESET);
 					printf(ANSI_COLOR_WHITE "\n");
