@@ -271,6 +271,7 @@ int main(int argc, char* argv[]) {
 			if(strcmp(localinput,"exit") == 0) stop=1;
 			else if(strcmp(localinput,"list") == 0) list_users(serverfile,servername);
 			else if(strcmp(localinput, "help") == 0) help(commands,ncmd);
+			else printf("Command not recognized\n");
 		}
 	}
 	unreg_sa(saip,saport,surname);
