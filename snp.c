@@ -1,15 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+//#include <string.h>
+//#include <unistd.h>
 #include <ctype.h>
-#include <netdb.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <string.h>
-#include <errno.h>
+//#include <netdb.h>
+//#include <sys/types.h>
+//#include <sys/socket.h>
+//#include <netinet/in.h>
+//#include <arpa/inet.h>
+//#include <string.h>
+//#include <errno.h>
 #include "helper.h"
 #include "communications.h"
 
@@ -251,7 +251,7 @@ int main(int argc, char* argv[]) {
 					printf(ANSI_COLOR_WHITE "\n");
 				}
 			}else if(strcmp(answer,"QRY")==0){
-				reply = find_user(buffer,nread,saip,saport, servername, serverfile);
+				reply = find_user(buffer,nread,saip,saport, serverfile, servername);
 				if(sendto(fd,reply,strlen(reply),0,(struct sockaddr*)&addr,addrlen) == -1){
 					printf(ANSI_COLOR_RED "Error replying to user" ANSI_COLOR_RESET);
 					printf(ANSI_COLOR_WHITE "\n");
