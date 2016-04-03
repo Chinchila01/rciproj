@@ -14,6 +14,10 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
+#include <signal.h>
+
+typedef void (*sighandler_t)(int);
+sighandler_t signal(int signum, sighandler_t handler);
 
 /* Terminal colors definition */
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -369,7 +373,7 @@ char * queryUser(char * snpip, char * port, char * user){
 
 	answer = comUDP(msg, snpip, port);
 
-	if (answer == NULL){
+	if (answer == NULL || strcmp(answer,"") == 0){
 		printf("UDP error: empty message received\n");
 		return "";
 	}
@@ -385,7 +389,7 @@ char * queryUser(char * snpip, char * port, char * user){
 
 	location = malloc(strlen(buffer));
 
-	location = buffer;
+	strcpy(location, buffer);
 
 	return location;
 }
@@ -440,6 +444,8 @@ int main(int argc, char* argv[]) {
 	int yes=1; /* YESSSS */
 
 	int save_history = 0;
+
+	void (*old_handler)(int);//interrupt handler
 
 	srand(time(NULL)); /* initializing pseudo-random number generator */
 
@@ -522,6 +528,9 @@ int main(int argc, char* argv[]) {
 	}
 
 	save_history = 1;
+
+	if((old_handler=signal(SIGPIPE,SIG_IGN))==SIG_ERR)exit(1); //error
+
 	printf("Let's start..\n");
 
 	while(1){
@@ -586,6 +595,8 @@ int main(int argc, char* argv[]) {
 					}else{
 						printf("User located at: %s\n", location);
 					}
+
+					memset(location, 0, sizeof(location));
 				}
 
 			}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0 && stateMachine == registered){
@@ -634,44 +645,56 @@ int main(int argc, char* argv[]) {
 
 								strcpy(buffer,location);
 
+								memset(location, 0, sizeof(location));
+
 								sscanf(buffer,"%[^';'];%s",remote_ip, remote_port);
-
-								fd_out=socket(AF_INET,SOCK_STREAM,0); /* TCP socket */
-
-								if(fd_out==-1){
-									printf("FAIL\n");
-									return -1;
-								}
 
 								inet_pton(AF_INET, remote_ip, &temp);
 								h=gethostbyaddr(&temp,sizeof(temp),AF_INET);
-								a=(struct in_addr*)h->h_addr_list[0];
 
-								memset((void*)&addr_out,(int)'\0',sizeof(addr_out));
+								if (h == NULL){
+									printf("Bad address. Host not found.\n");
+								}else{
+									a=(struct in_addr*)h->h_addr_list[0];
 
-								addr_out.sin_family=AF_INET;
-								addr_out.sin_addr=*a;
-								addr_out.sin_port=htons(atoi(remote_port));
+									if (a == NULL){
+										printf("Bad address. Host not found.\n");
+									}else{
 
-								n=connect(fd_out,(struct sockaddr*)&addr_out,sizeof(addr_out));
+										fd_out=socket(AF_INET,SOCK_STREAM,0); /* TCP socket */
 
-								if (n == -1){
-									printf("ERROR connecting\n");
-									return -1;
+										if(fd_out==-1){
+											printf("FAIL\n");
+											return -1;
+										}
+
+										memset((void*)&addr_out,(int)'\0',sizeof(addr_out));
+
+										addr_out.sin_family=AF_INET;
+										addr_out.sin_addr=*a;
+										addr_out.sin_port=htons(atoi(remote_port));
+
+										n=connect(fd_out,(struct sockaddr*)&addr_out,sizeof(addr_out));
+
+										if (n == -1){
+											printf("ERROR connecting\n");
+											return -1;
+										}
+
+										sprintf(buffer,"NAME %s",in_name_surname);
+
+										nw = write(fd_out,buffer,strlen(buffer));
+
+										if (nw <= 1){
+											printf("Could not send message.\n");
+										}
+
+										printf(ANSI_COLOR_GREEN "\nConnected with %s !!\n" ANSI_COLOR_RESET, name2connect);
+										printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
+
+										stateMachine = onChat_authenticating_step_1; /* onChat_sent */ 
+									}
 								}
-
-								sprintf(buffer,"NAME %s",in_name_surname);
-
-								nw = write(fd_out,buffer,strlen(buffer));
-
-								if (nw <= 1){
-									printf("Could not send message.\n");
-								}
-
-								printf(ANSI_COLOR_GREEN "\nConnected with %s !!\n" ANSI_COLOR_RESET, name2connect);
-								printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
-
-								stateMachine = onChat_authenticating_step_1; /* onChat_sent */ 
 							}	
 						}				
 					}
@@ -818,7 +841,7 @@ int main(int argc, char* argv[]) {
 				if(n == -1){
 					printf("ERROR: Cannot read message\n");
 				}else if(n == 0){
-					printf(ANSI_COLOR_RED "Connection closed by your friend." ANSI_COLOR_RESET);
+					printf(ANSI_COLOR_RED "Connection closed." ANSI_COLOR_RESET);
 					printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 				 	close(newfd);
 				 	newfd = NULL;
@@ -906,7 +929,7 @@ int main(int argc, char* argv[]) {
 				if(n == -1){
 						printf("ERROR: Cannot read message\n");
 					}else if(n == 0){
-						printf(ANSI_COLOR_RED "Connection closed by your friend." ANSI_COLOR_RESET);
+						printf(ANSI_COLOR_RED "Connection closed." ANSI_COLOR_RESET);
 						printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 					 	close(fd_out);
 					 	fd_out = NULL;
@@ -930,6 +953,7 @@ int main(int argc, char* argv[]) {
 
 							}else{
 								encrypted = malloc(sizeof(unsigned char));
+								
 								encrypt(encrypted, randChar);
 
 								sprintf(buffer,"AUTH %c",*encrypted);
