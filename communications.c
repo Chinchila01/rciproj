@@ -119,16 +119,9 @@ bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char
 		return false;
 	}
 
-	// check for query problems (ex: user not found)
-	if(strstr(answer,"NOK") != NULL) {
-		printf("Error: %s\n",answer);
-		return false;
-	}
-
 	// check for ack or error message
 	if(strcmp(answer,"OK") != 0) {
 		printf("Error: %s\n",answer);
-		free(answer);
 		return false;
 	}
 
