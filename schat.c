@@ -215,8 +215,6 @@ int main(int argc, char* argv[]) {
  		if(FD_ISSET(fileno(stdin),&rfds)){
 			fgets(usrIn,100,stdin);
 
-			printf("state machine: %d\n", stateMachine);
-
 			if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
 				if(usrRegister(in_snpip, in_snpport,in_name_surname,in_ip,in_scport)){
 					stateMachine = registered;
@@ -273,33 +271,40 @@ int main(int argc, char* argv[]) {
 
 			}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0 && stateMachine == registered){
 
-				memset(buffer, 0, sizeof(buffer));
+				// here, one can establish connection with another user for chatting
 
-				ny = sscanf(usrIn,"connect %s %s", buffer, cipherFile);
+				memset(buffer, 0, sizeof(buffer)); // clean buffer
+
+				ny = sscanf(usrIn,"connect %s %s", buffer, cipherFile); // get command arguments
 
 				if (ny > 2){
 					printf ("Too many arguments to the connect function. Type help for instructions.\n");
 				}else{
 
 					if (ny == 2){
+						// if we have 2 arguments, the user is specifying other key file than the default hashtable.txt
 
+						// input error check
 						if (strcmp(cipherFile,"") == 0 || cipherFile == NULL){
 							printf("Using default cipher file: hashtable.txt\n");
 						}else{
+							// alocate and set hashtable global variable to user specific file
 							HASHTABLE = malloc(strlen(cipherFile));
 							strcpy(HASHTABLE,cipherFile);
 							printf("Using your cipher file: %s\n", HASHTABLE);
 						}
 
-						
 					}else if (ny == 1){
+						// just one argument, just the name to connect, apply default hashtable file
 						printf("Using default cipher file: hashtable.txt\n");
 					}
 
+					// alocate and set friend name variable
 					name2connect = malloc(strlen(buffer));
 					strcpy(name2connect,buffer);
 
 					if (strcmp(name2connect,in_name_surname) == 0){
+						// do not allow establishing connection with myself
 						printf("Ahah are you ok? Do you really want to talk to yourself?\n");
 					}else{
 						if (strlen(name2connect) <= 1){
