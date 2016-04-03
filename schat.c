@@ -215,6 +215,8 @@ int main(int argc, char* argv[]) {
  		if(FD_ISSET(fileno(stdin),&rfds)){
 			fgets(usrIn,100,stdin);
 
+			printf("state machine: %d\n", stateMachine);
+
 			if (strcmp(usrIn,"join\n") == 0 && stateMachine == init){
 				if(usrRegister(in_snpip, in_snpport,in_name_surname,in_ip,in_scport)){
 					stateMachine = registered;
@@ -536,7 +538,10 @@ int main(int argc, char* argv[]) {
 					printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 				 	close(newfd);
 				 	newfd = NULL;
-				 	stateMachine = registered;
+
+				 	if (stateMachine != init){
+				 		stateMachine = registered;
+				 	}
 				}else{
 
 					if (stateMachine == onChat_received){
@@ -621,7 +626,10 @@ int main(int argc, char* argv[]) {
 						printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 					 	close(fd_out);
 					 	fd_out = NULL;
-					 	stateMachine = registered;
+
+					 	if (stateMachine != init){
+				 			stateMachine = registered;
+				 		}
 					}else{
 						if (stateMachine == onChat_sent){
 
