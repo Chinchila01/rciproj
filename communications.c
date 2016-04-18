@@ -76,13 +76,13 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	}
 
 
-	answer=malloc(n); // alocate answer according to received bytes
+	answer=malloc(n+1); // alocate answer according to received bytes
 	sprintf(answer,"%.*s",n,buffer);
 
 	printf("Raw answer: %s\n",answer);
 
 	close(surDir_sock); // close udp socket
-
+	free(msg);
 	return answer;
 }
 
@@ -122,6 +122,7 @@ bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char
 	// check for ack or error message
 	if(strcmp(answer,"OK") != 0) {
 		printf("Error: %s\n",answer);
+		free(answer);
 		return false;
 	}
 
@@ -207,6 +208,7 @@ char * queryUser(char * snpip, char * port, char * user){
 	// check for query problems (ex: user not found)
 	if(strstr(answer,"NOK") != NULL) {
 		printf("Error: %s\n",answer);
+		free(answer);
 		return "";
 	}
 
@@ -219,6 +221,7 @@ char * queryUser(char * snpip, char * port, char * user){
 
 	strcpy(location, buffer);
 
+	free(answer);
 	return location;
 }
 
@@ -268,6 +271,7 @@ int reg_sa(char* saip, char* saport, char* surname, char* localip, char* snpport
 
 	printf(ANSI_COLOR_GREEN "reg_sa: Successful!" ANSI_COLOR_RESET);
 	printf(ANSI_COLOR_WHITE "\n");
+	free(answer);
 	return 0;
 }
 

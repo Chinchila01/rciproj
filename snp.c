@@ -199,7 +199,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	/* Allocating memory for first 3 chars of buffer (facilitates message parsing) */
-	answer = malloc(3*sizeof(char));
+	answer = malloc(3*sizeof(char)+1);
 	
 	/* Begin listening  */
 	printf(ANSI_COLOR_GREEN "Welcome to our server!" ANSI_COLOR_RESET);
@@ -247,6 +247,7 @@ int main(int argc, char* argv[]) {
 					printf(ANSI_COLOR_RED "Error replying to user" ANSI_COLOR_RESET);
 					printf(ANSI_COLOR_WHITE "\n");
 				}
+				free(reply);
 			}else {
 				printf(ANSI_COLOR_RED "Command not recognized\n" ANSI_COLOR_RESET);
 				if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1){
@@ -266,7 +267,8 @@ int main(int argc, char* argv[]) {
 		}
 	}
 	unreg_sa(saip,saport,surname);
-	free(answer);	
+	free(answer);
+	free(serverfile);	
 	close(fd);
 	printf(ANSI_COLOR_GREEN "Bye Bye :(" ANSI_COLOR_RESET);
 	printf(ANSI_COLOR_WHITE "\n");

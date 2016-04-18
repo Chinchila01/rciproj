@@ -445,6 +445,8 @@ int main(int argc, char* argv[]) {
 				fd = NULL;
 				fd_out = NULL;
 
+				free(name2connect);
+				free(location);
 				printf("Exiting..\n");
 				break;
 			}else{
@@ -667,6 +669,8 @@ int main(int argc, char* argv[]) {
 
 								nw = write(fd_out,buffer,strlen(buffer));
 
+								free(encrypted);
+
 								stateMachine = onChat_authenticating_step_2;
 							}
 
@@ -690,6 +694,8 @@ int main(int argc, char* argv[]) {
 
 								stateMachine = registered;
 							}
+
+							free(encrypted);
 						}
 					}
 			}

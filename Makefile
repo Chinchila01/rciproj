@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -pedantic
+CFLAGS=-g -Wall -pedantic
 
 snp: snp.c
 	$(CC) $(CFLAGS) -o snp snp.c helper.c communications.c
