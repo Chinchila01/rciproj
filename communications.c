@@ -25,6 +25,7 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	/* Open UDP socket for our server */
 	if((surDir_sock=socket(AF_INET,SOCK_DGRAM,0))==-1) {
 		printf("UDP error: %s\n",strerror(errno));
+		free(msg);
 		return NULL;
 	}	
 	
@@ -33,6 +34,7 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	if((h=gethostbyaddr(&temp,sizeof(temp),AF_INET)) == NULL) {
 		printf("UDP error: sending getting host information\n");
 		close(surDir_sock);
+		free(msg);
 		return NULL;
 	}
 
@@ -48,6 +50,8 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 
 	// all set up, send message
 	n=sendto(surDir_sock,msg,strlen(msg),0,(struct sockaddr*)&addr,sizeof(addr));
+
+	free(msg);
 
 	// check for errors on message send
 	if(n==-1) {
@@ -76,13 +80,13 @@ char * comUDP(char * msg, char * dst_ip, char * dst_port){
 	}
 
 
-	answer=malloc(n+1); // alocate answer according to received bytes
+	answer = malloc(n + 1); // alocate answer according to received bytes
 	sprintf(answer,"%.*s",n,buffer);
 
 	printf("Raw answer: %s\n",answer);
 
 	close(surDir_sock); // close udp socket
-	free(msg);
+	
 	return answer;
 }
 
@@ -107,8 +111,8 @@ bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char
 	// format user register message
 	sprintf(buffer,"REG %s;%s;%s",full_name,my_ip,my_port);
 
-	msg = malloc(strlen(buffer));
-	msg = buffer;
+	msg = malloc(strlen(buffer) + 1);
+	strcpy(msg, buffer);
 
 	// send message through comUDP function
 	answer = comUDP(msg, snpip, port);
@@ -116,6 +120,7 @@ bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char
 	// check for error
 	if (answer == NULL){
 		printf("UDP error: empty message received\n");
+		free(answer);
 		return false;
 	}
 
@@ -127,7 +132,7 @@ bool usrRegister(char * snpip, char * port, char * full_name, char * my_ip, char
 	}
 
 	printf("User registration successful!\n");
-	free(answer);
+	free (answer);
 	return true;
 }
 
@@ -150,8 +155,8 @@ bool usrExit(char * snpip, char * port, char * full_name){
 	// format user unregister message
 	sprintf(buffer,"UNR %s",full_name);
 
-	msg = malloc(strlen(buffer));
-	msg = buffer;
+	msg = malloc(strlen(buffer) + 1);
+	strcpy(msg, buffer);
 
 	// send message through comUDP function
 	answer = comUDP(msg, snpip, port);
@@ -159,17 +164,19 @@ bool usrExit(char * snpip, char * port, char * full_name){
 	// check for error
 	if (answer == NULL){
 		printf("UDP error: empty message received\n");
+		free(answer);
 		return false;
 	}
 
 	// check for ack or error message
 	if(strcmp(answer,"OK") != 0) {
 		printf("Error: %s\n",answer);
+		free(answer);
 		return false;
 	}
 
 	printf("User unregistered successful!\n");
-
+	free(answer);
 	return true;
 }
 
@@ -193,8 +200,8 @@ char * queryUser(char * snpip, char * port, char * user){
 	// format user query message
 	sprintf(buffer,"QRY %s",user);
 
-	msg = malloc(strlen(buffer));
-	msg = buffer;
+	msg = malloc(strlen(buffer) + 1);
+	strcpy(msg, buffer);
 
 	// send message through comUDP function
 	answer = comUDP(msg, snpip, port);
@@ -217,7 +224,7 @@ char * queryUser(char * snpip, char * port, char * user){
 	// process information and store address data on buffer
 	sscanf(answer,"RPL %[^';'];%s", garb_0, buffer);
 
-	location = malloc(strlen(buffer));
+	location = malloc(strlen(buffer) + 1);
 
 	strcpy(location, buffer);
 

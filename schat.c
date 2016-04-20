@@ -106,9 +106,8 @@ int main(int argc, char* argv[]) {
 	srand(time(NULL)); /* initializing pseudo-random number generator */
 
 	/*Check and retrieve given arguments */
-	while((c=getopt(argc,argv,options)) != -1) {
-		switch(c)
-		{
+	while((c = getopt(argc,argv,options)) != -1) {
+		switch(c){
 		    case 'n':
 			in_name_surname = optarg;
 			break;
@@ -226,6 +225,11 @@ int main(int argc, char* argv[]) {
 
 			}else if(strcmp(usrIn,"leave\n") == 0 && stateMachine != init){
 
+				if(stateMachine == onChat_received || stateMachine == onChat_sent){
+					free(name2connect);
+					free(location);
+				}
+
 				// here, one can leave the network and, of course, the current conversation (if any)
 				if(!usrExit(in_snpip, in_snpport,in_name_surname)) {
 						printf(ANSI_COLOR_RED "Unregistration was not possible, leaving anyway...");
@@ -248,7 +252,7 @@ int main(int argc, char* argv[]) {
 				sscanf(usrIn,"find %s", buffer); // get user to search from stdin
 
 				// buffer processing to get the user name and memory allocation
-				name2connect = malloc(strlen(buffer));
+				name2connect = malloc(strlen(buffer) + 1);
 				strcpy(name2connect,buffer); 
 
 				if (strlen(name2connect) <= 1){
@@ -257,6 +261,8 @@ int main(int argc, char* argv[]) {
 				}else{
 					// got username, let's search for him - call queryUser function
 					location = queryUser(in_snpip, in_snpport, name2connect);
+
+					free(name2connect);
 
 					if (strcmp(location,"") == 0 || location == NULL){
 						// error check
@@ -267,6 +273,7 @@ int main(int argc, char* argv[]) {
 					}
 
 					memset(location, 0, strlen(location)*sizeof(char)); // clean buffer
+					free(location);
 				}
 
 			}else if(strstr(usrIn,"connect") != NULL && strcmp(usrIn,"disconnect\n") != 0 && stateMachine == registered){
@@ -289,7 +296,7 @@ int main(int argc, char* argv[]) {
 							printf("Using default cipher file: hashtable.txt\n");
 						}else{
 							// alocate and set hashtable global variable to user specific file
-							HASHTABLE = malloc(strlen(cipherFile));
+							HASHTABLE = malloc(strlen(cipherFile) + 1);
 							strcpy(HASHTABLE,cipherFile);
 							printf("Using your cipher file: %s\n", HASHTABLE);
 						}
@@ -300,7 +307,7 @@ int main(int argc, char* argv[]) {
 					}
 
 					// alocate and set friend name variable
-					name2connect = malloc(strlen(buffer));
+					name2connect = malloc(strlen(buffer) + 1);
 					strcpy(name2connect,buffer);
 
 					if (strcmp(name2connect,in_name_surname) == 0){
@@ -403,7 +410,6 @@ int main(int argc, char* argv[]) {
 				memset(buffer, 0, sizeof(buffer)); // clean buffer again
 
 			}else if(strcmp(usrIn,"disconnect\n") == 0 && (stateMachine == onChat_sent || stateMachine == onChat_received) && stateMachine != init){
-
 				// end conversation with someone
 
 				// shutdown outgoing connection
@@ -420,6 +426,11 @@ int main(int argc, char* argv[]) {
 				stateMachine = registered;
 
 			}else if(strcmp(usrIn,"exit\n") == 0){
+
+				if(stateMachine == onChat_received || stateMachine == onChat_sent){
+					free(name2connect);
+					free(location);
+				}
 
 				// leave network (unregister from snp) if already registered
 				if(stateMachine != init){
@@ -445,8 +456,6 @@ int main(int argc, char* argv[]) {
 				fd = NULL;
 				fd_out = NULL;
 
-				free(name2connect);
-				free(location);
 				printf("Exiting..\n");
 				break;
 			}else{
@@ -600,6 +609,9 @@ int main(int argc, char* argv[]) {
 							stateMachine = registered;
 						}
 
+						free(encrypted);
+
+
 					}else if (stateMachine == onChat_authenticating_step_3){
 
 						sscanf(buffer,"AUTH %c",&randChar);
@@ -612,6 +624,8 @@ int main(int argc, char* argv[]) {
 						nw = write(newfd,buffer,strlen(buffer));
 
 						stateMachine = onChat_received;
+
+						free(encrypted);
 						
 					}
 				}
@@ -633,6 +647,9 @@ int main(int argc, char* argv[]) {
 						printf(ANSI_COLOR_WHITE "\n" ANSI_COLOR_RESET);
 					 	close(fd_out);
 					 	fd_out = NULL;
+
+					 	free(name2connect);
+						free(location);
 
 					 	if (stateMachine != init){
 				 			stateMachine = registered;
