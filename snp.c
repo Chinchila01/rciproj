@@ -247,7 +247,7 @@ int main(int argc, char* argv[]) {
 					printf(ANSI_COLOR_RED "Error replying to user" ANSI_COLOR_RESET);
 					printf(ANSI_COLOR_WHITE "\n");
 				}
-				free(reply);
+				if(reply != NULL) free(reply);
 			}else {
 				printf(ANSI_COLOR_RED "Command not recognized\n" ANSI_COLOR_RESET);
 				if(sendto(fd,"NOK",3,0,(struct sockaddr*)&addr,addrlen) == -1){
