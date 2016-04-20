@@ -423,7 +423,7 @@ int main(int argc, char* argv[]) {
 
 			}else if(strcmp(usrIn,"exit\n") == 0){
 
-				if(stateMachine == onChat_received || stateMachine == onChat_sent){
+				if(stateMachine == onChat_sent){
 					free(name2connect);
 					free(location);
 				}
