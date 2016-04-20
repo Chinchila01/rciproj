@@ -225,10 +225,6 @@ int main(int argc, char* argv[]) {
 
 			}else if(strcmp(usrIn,"leave\n") == 0 && stateMachine != init){
 
-				if(stateMachine == onChat_received || stateMachine == onChat_sent){
-					free(name2connect);
-					free(location);
-				}
 
 				// here, one can leave the network and, of course, the current conversation (if any)
 				if(!usrExit(in_snpip, in_snpport,in_name_surname)) {
